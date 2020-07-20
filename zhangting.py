@@ -134,28 +134,38 @@ def saveMinuteDataInfo(ts_code, startDate, endDate):
         df.to_csv(fileName, mode='a', header=False,columns=['ts_code', 'trade_time', 'open', 'close', 'high'])
 
 def downloadMinutesToCsv(startDate, endDate):
-    listCanlender = []
+    listStartCanlender = []
+    listEndCanlender = []
     getTradeCanlendar(startDate, endDate)
     getAllStocks(startDate)  # 获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
 
     # 1. 轮询所有日期，把第一个月的第一天取出来放到一个list里面
     for i in range(len(g_listTradeCanlendar)-1):
         tmpStr5 = g_listTradeCanlendar[i][0:6]
-        tmpListStr = ''.join(listCanlender)
+        tmpListStr = ''.join(listStartCanlender)
         if tmpStr5 not in tmpListStr:
-            listCanlender.append(g_listTradeCanlendar[i])
+            listStartCanlender.append(g_listTradeCanlendar[i])
+
+    #1.轮询所有日期，把第一个月的最后一天取出来放到一个list里面
+    g_listTradeCanlendar.sort(reverse=True)
+    for i in range(len(g_listTradeCanlendar)-1):
+        tmpStr5 = g_listTradeCanlendar[i][0:6]
+        tmpListStr = ''.join(listEndCanlender)
+        if tmpStr5 not in tmpListStr:
+            listEndCanlender.append(g_listTradeCanlendar[i])
+    listEndCanlender.sort(reverse=False)
+
+    print(listStartCanlender)
+    print(listEndCanlender)
+
+    g_listTradeCanlendar.sort(reverse=False)
 
     for i in range(len(g_listAllStocks)): #轮询所有股票
         #2. 把每个月的分时数据取出来存入文件，有几个月就存几次文件
         print(f'Save stock: {g_listAllStocks[i]}')
-        for j in range(len(listCanlender)):
-            startDate = listCanlender[i]
-            month = int(listCanlender[i][4:6])
-            if (2==month) or (4==month) or(6==month) or(9==month) or(11==month):
-                lastDay = 30
-            else:
-                lastDay = 31
-            endDate   = listCanlender[i][0:6] + str(lastDay)
+        for j in range(len(listStartCanlender)):
+            startDate = listStartCanlender[i]
+            endDate   = listEndCanlender[i]
             saveMinuteDataInfo(g_listAllStocks[i], startDate, endDate)
 
         # 3. 把每个文件里10点以后的数据删除
@@ -215,5 +225,5 @@ def runMain():
 
 if __name__ == "__main__":
     #runMain()
-    downloadMinutesToCsv('20140701', '20160301')
+    downloadMinutesToCsv('20140701', '20160331')
     #getMinuteDataInfo('000002.SZ', '20140106', '20140306')
