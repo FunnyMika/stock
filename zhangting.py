@@ -1,6 +1,12 @@
 import tushare as ts
 import pandas as pd
 import csv
+import time
+import os.path
+
+from urllib.request import urlopen
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup
 
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 g_listAllStocks = []
@@ -57,10 +63,13 @@ def getSuspendStocks(date):
 #600000.SH         2020-01-08 09:31:00   12.41  12.44  12.45  12.41  880140
 def getSingleStockMinInfo(ts_code, date):
     global g_listSingleStockMinHigh
-    df = ts.pro_bar(ts_code = ts_code,
-                    freq = '1min',
-                    start_date = date + ' 09:31:00',
-                    end_date = date + ' 10:00:00')
+    str_list = list(date)
+    str_list.insert(4, '-')
+    str_list.insert(7, '-')
+    dateStr = ''.join(str_list)
+    startDate = dateStr + ' 09:31:00'
+    endDate = dateStr + ' 10:00:00'
+    df = ts.pro_bar(ts_code=ts_code, freq='1min', start_date=startDate, end_date=endDate)
     for i in range(len(df)):
         g_listSingleStockMinHigh.append(df.iloc[i, 4])
     print(df)
@@ -84,7 +93,7 @@ def getOnedayHighestAndClosePrice(date, stock):
     pro = ts.pro_api()
     df = pro.daily(ts_code=stock, trade_date=date, fields ='open, high, close')
     print(df)
-    return df.iloc[0, 0], df.iloc[0, 1], df.iloc[0, 1]
+    return df.iloc[0, 0], df.iloc[0, 1], df.iloc[0, 2]
 
 #计算收益率
 def calculateYield(date):
@@ -102,6 +111,54 @@ def calculateYield(date):
             yeild = int( ( (close - float(value)) / float(value) ) * 100 )
         g_listYield.append(str(yeild))
         print(g_listYield)
+
+def convertDate(date):
+    str_list = list(date)
+    str_list.insert(4, '-')
+    str_list.insert(7, '-')
+    dateStr = ''.join(str_list)
+    return dateStr
+
+def saveMinuteDataInfo(ts_code, startDate, endDate):
+    fileName = 'C:/python/csv/zhangting/' + ts_code +'.csv'
+    startTime = convertDate(startDate)
+    endTime   = convertDate(endDate)
+    startTime = startTime + ' 09:30:00'
+    endTime   = endTime + ' 15:00:00'
+
+    df = ts.pro_bar(ts_code=ts_code, freq='1min', start_date=startTime, end_date=endTime)
+    df = df.sort_index(ascending=False)
+    if False == os.path.isfile(fileName):
+        df.to_csv(fileName,mode='a', header=True,columns=['ts_code', 'trade_time', 'open', 'close', 'high'])
+    else:
+        df.to_csv(fileName, mode='a', header=False,columns=['ts_code', 'trade_time', 'open', 'close', 'high'])
+
+def downloadMinutesToCsv(startDate, endDate):
+    listCanlender = []
+    getTradeCanlendar(startDate, endDate)
+    getAllStocks(startDate)  # 获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
+
+    # 1. 轮询所有日期，把第一个月的第一天取出来放到一个list里面
+    for i in range(len(g_listTradeCanlendar)-1):
+        tmpStr5 = g_listTradeCanlendar[i][0:6]
+        tmpListStr = ''.join(listCanlender)
+        if tmpStr5 not in tmpListStr:
+            listCanlender.append(g_listTradeCanlendar[i])
+
+    for i in range(len(g_listAllStocks)): #轮询所有股票
+        #2. 把每个月的分时数据取出来存入文件，有几个月就存几次文件
+        print(f'Save stock: {g_listAllStocks[i]}')
+        for j in range(len(listCanlender)):
+            startDate = listCanlender[i]
+            month = int(listCanlender[i][4:6])
+            if (2==month) or (4==month) or(6==month) or(9==month) or(11==month):
+                lastDay = 30
+            else:
+                lastDay = 31
+            endDate   = listCanlender[i][0:6] + str(lastDay)
+            saveMinuteDataInfo(g_listAllStocks[i], startDate, endDate)
+
+        # 3. 把每个文件里10点以后的数据删除
 
 def runMain():
     global g_dicFoundStock
@@ -157,4 +214,6 @@ def runMain():
 #getSingleStockMinInfo('002500.SZ', '20200717')
 
 if __name__ == "__main__":
-    runMain()
+    #runMain()
+    downloadMinutesToCsv('20140701', '20160301')
+    #getMinuteDataInfo('000002.SZ', '20140106', '20140306')
