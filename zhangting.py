@@ -25,7 +25,7 @@ def getTradeCanlendar(startDate, endDate):
     df = pro.trade_cal(exchange='', start_date=startDate, end_date=endDate, is_open = 1)
     for i in range(len(df)):
         g_listTradeCanlendar.append(df.iloc[i,1])
-    print(g_listTradeCanlendar)
+    print('getTradeCanlendar: ' + str(g_listTradeCanlendar))
 
 #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
 def getAllStocks(startDate):
@@ -46,7 +46,7 @@ def getAllStocks(startDate):
     for i in range(len(df)):
         g_listAllStocks.append(df.iloc[i,0])
 
-    print(g_listAllStocks)
+    print('getAllStocks: ' + str(g_listAllStocks))
     #df.to_csv(filePathNewAllStock,encoding='utf_8_sig')
 
 #获取某一天所有停牌的股票代码
@@ -70,14 +70,16 @@ def getSingleStockMinInfo(ts_code, date):
     startDate = dateStr + ' 09:31:00'
     endDate = dateStr + ' 10:00:00'
     df = ts.pro_bar(ts_code=ts_code, freq='1min', start_date=startDate, end_date=endDate)
+    #df.sort_index(axis=1,ascending=False)
     for i in range(len(df)):
         g_listSingleStockMinHigh.append(df.iloc[i, 4])
-    print(df)
+        #print(df.iloc[i, 1] + '   ' + str(df.iloc[i, 4])) #返回的时间顺序是从10:00 --> 9:31
+    g_listSingleStockMinHigh.reverse() #重新排序，按照时间先后顺序排序，从9:31 --> 10：00
 
 #计算涨停价，涨停价 = 昨日收盘价 * 1.100 (四舍五入，取小数点2位)
 def calculateHighestPrice(price):
     highestPrice = round(float(price) * 1.100, 2)
-    print(f'price={price}, highestPrice={highestPrice}')
+    print(f'calculateZhangtingPrice: price={price}, highestPrice={highestPrice}')
     return highestPrice
 
 #获取某个股票某天的前一日收盘价
@@ -85,7 +87,7 @@ def getYesterdayClosePrice(ts_code, date):
     pro = ts.pro_api()
     df = pro.query('daily_basic', ts_code=ts_code, trade_date=date,fields='close')
     close = df.iloc[0,0] #第0行第0列
-    print(f'ts_code = {ts_code}, date = {date}, closePrice = {close}')
+    print(f'getYesterdayClosePrice: ts_code = {ts_code}, date = {date}, closePrice = {close}')
     return float(close)
 
 #获得某一天内某个股票的最高价和收盘价
@@ -110,7 +112,7 @@ def calculateYield(date):
         else: #否者当天收盘价为卖价
             yeild = int( ( (close - float(value)) / float(value) ) * 100 )
         g_listYield.append(str(yeild))
-        print(g_listYield)
+        print('calculateYield: ' + date + str(g_listYield))
 
 def convertDate(date):
     str_list = list(date)
@@ -164,23 +166,26 @@ def downloadMinutesToCsv(startDate, endDate):
         #2. 把每个月的分时数据取出来存入文件，有几个月就存几次文件
         print(f'Save stock: {g_listAllStocks[i]}')
         for j in range(len(listStartCanlender)):
-            startDate = listStartCanlender[i]
-            endDate   = listEndCanlender[i]
-            saveMinuteDataInfo(g_listAllStocks[i], startDate, endDate)
+            startDate = listStartCanlender[j]
+            endDate   = listEndCanlender[j]
+            try:
+                saveMinuteDataInfo(g_listAllStocks[i], startDate, endDate)
+            except Exception as e:
+                continue
 
         # 3. 把每个文件里10点以后的数据删除
 
 def runMain():
     global g_dicFoundStock
 
-    startDate = '20200106'
-    endDate   = '20200109'
+    startDate = '20200713'
+    endDate   = '20200717'
 
     getAllStocks(startDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
     getTradeCanlendar(startDate, endDate) #获得起始日期内的合理交易日
 
     #轮询所有交易日
-    for i in range(1, len(g_listTradeCanlendar)):
+    for i in range(1,50):#range(1, len(g_listTradeCanlendar)):
         date = g_listTradeCanlendar[i]
         print(f'日期：{date}')
 
@@ -224,6 +229,6 @@ def runMain():
 #getSingleStockMinInfo('002500.SZ', '20200717')
 
 if __name__ == "__main__":
-    #runMain()
-    downloadMinutesToCsv('20140701', '20160331')
+    runMain()
+    #downloadMinutesToCsv('20200106', '20200717')
     #getMinuteDataInfo('000002.SZ', '20140106', '20140306')
