@@ -24,6 +24,7 @@ def saveParaToCsv(ts_code, date, profit):
 def calculateProfit(fileName):
     global g_dirProfit
     g_dirProfit = {}
+    dirtCount = {}
     with open(fileName, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -31,10 +32,14 @@ def calculateProfit(fileName):
             value = row['profit']
             if date not in g_dirProfit:
                 g_dirProfit[date] = float(value)
+                dirtCount[date] = 1
             else:
                 g_dirProfit[date] = g_dirProfit[date] + float(value)
+                dirtCount[date] = dirtCount[date] + 1
     #print(g_dirProfit)
     g_dirProfit = dict(sorted(g_dirProfit.items(), key=lambda d: d[0], reverse=False))
+    for k in g_dirProfit:
+        g_dirProfit[k] = round(g_dirProfit[k] / dirtCount[k], 2)
     #print(g_dirProfit)
 
 def saveFile():
