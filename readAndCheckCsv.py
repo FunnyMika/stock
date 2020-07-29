@@ -39,7 +39,7 @@ def calculateProfit(fileName):
     #print(g_dirProfit)
     g_dirProfit = dict(sorted(g_dirProfit.items(), key=lambda d: d[0], reverse=False))
     for k in g_dirProfit:
-        g_dirProfit[k] = round(g_dirProfit[k] / dirtCount[k], 2)
+        g_dirProfit[k] = round((g_dirProfit[k] * 100) / dirtCount[k], 4)
     #print(g_dirProfit)
 
 def saveFile():
