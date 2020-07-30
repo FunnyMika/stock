@@ -270,7 +270,7 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
 def getCurrentDayDataFromCsv(date, skipTime):
     allStockInfo = {}
     oneStockInfo = []
-    for k in range(100):#range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
+    for k in range(100):#range(500):#range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
         if g_listAllStocks[k] not in g_listSuspendStocks:
             oneStockInfo = []
             oneStockInfo = getOneStockDataFromCsv(g_listAllStocks[k], date, skipTime)
@@ -402,6 +402,7 @@ def mainFunc():
     # {'000001.SZ': ['2020-07-13 15:00:00', '14.89', '14.89', '2020-07-14 09:30:00', '14.9', '14.9', '2020-07-14 09:31:00', '14.86', '14.9', '2020-07-14 09:32:00'
     #保存某只股票10点前的分时数据，其中第一条记录是昨天的收盘价
     dictOneDayInfoTo10 = {}
+    readAndCheckCsv.deleteProfitToCsv(readAndCheckCsv.g_profitFileName)
 
     getAllStocks(startDate,endDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
     #g_listAllStocks = ['002500.SZ']
@@ -417,12 +418,12 @@ def mainFunc():
         calculateYield(date) #和昨天比较，计算收益率
         g_dicBuyStock = {}
 
-        getSuspendStocks(date)  #获取当天的停牌股票信息
+        #getSuspendStocks(date)  #获取当天的停牌股票信息
 
         #获取当天不停牌的所有股票在9:30--10:00之间的数据
         dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, '10:01:00')
         #print(dictOneDayInfoTo10)
-        print(f'字典大小={len(dictOneDayInfoTo10)}')
+        #print(f'字典大小={len(dictOneDayInfoTo10)}')
         #return
 
         startMin = 4
@@ -450,8 +451,8 @@ def mainFunc():
                 if float(currentClosePrice) == float(highestPrice):
                     g_dicBuyStock[keyCode] = str(highestPrice)
                     del dictOneDayInfoTo10[keyCode]
-                    break
                     print(f'买入：date={i}, time={j}, code={keyCode}, price={str(g_dicBuyStock[keyCode])}')
+                    break
     readAndCheckCsv.calculateProfit(readAndCheckCsv.g_profitFileName)
     readAndCheckCsv.drawProfitPic() #打印 startDate~~~~endDate 收益率
 
