@@ -12,15 +12,15 @@ from bs4 import BeautifulSoup
 import sys
 import threading
 import pymysql
-import operateMySql
+import readAndCheckCsv
 
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 g_listAllStocks = []
 g_listSuspendStocks = []
 g_listTradeCanlendar = []
 g_listSingleStockMinHigh = []
-g_dicFoundStock = {}
-g_listYield = []
+g_dicBuyStock = {}
+g_dicYield = {}
 g_totalCost = 1000000  #拿100万人民币进行测试
 g_singlCost = 100000  #每支股票买10万块钱
 g_limitPrice = 100.00 #股价超过100块钱则不买
@@ -114,7 +114,7 @@ def getSingleStockMinInfo(ts_code, date):
 #计算涨停价，涨停价 = 昨日收盘价 * 1.100 (四舍五入，取小数点2位)
 def calculateZhangTingPrice(price):
     highestPrice = round(float(price) * 1.100, 2)
-    print(f'calculateZhangtingPrice: price={price}, highestPrice={highestPrice}')
+    #print(f'calculateZhangtingPrice: price={price}, highestPrice={highestPrice}')
     return highestPrice
 
 #获取某个股票某天的前一日收盘价
@@ -125,29 +125,44 @@ def getYesterdayClosePrice(ts_code, date):
     print(f'getYesterdayClosePrice: ts_code = {ts_code}, date = {date}, closePrice = {close}')
     return float(close)
 
-#获得某一天内某个股票的最高价和收盘价
-def getOnedayHighestAndClosePrice(date, stock):
-    pro = ts.pro_api()
-    df = pro.daily(ts_code=stock, trade_date=date, fields ='open, high, close')
-    print(df)
-    return df.iloc[0, 0], df.iloc[0, 1], df.iloc[0, 2]
+#获得某一天内某个股票的最高价和收盘价,open, high, close
+def getOnedayHighestAndClosePrice(date, ts_code):
+    openPrice, closePrice, highPrice = 0.0, 0.0, 0.0
+    openFlag = False
+    fileName = 'C:/python/csv/zhangting/20200106to20200717/' + ts_code + '.csv'
+    date = convertDate(date)
+
+    with open(fileName, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if date in row['trade_time']:
+                if False == openFlag:
+                    openPrice = float(row['open'])
+                    openFlag = True
+                closePrice = float(row['close'])
+                if highPrice < float(row['high']):
+                    highPrice = float(row['high'])
+    return openPrice, highPrice, closePrice
 
 #计算收益率
 def calculateYield(date):
-    global g_listYield
-    #g_dicFoundStock = {'002500.SZ':'7.99'}  #临时测试使用
-    if 0 == len(g_dicFoundStock):
+    global g_dicYield
+    #g_dicBuyStock = {'002500.SZ':'7.99'}  #临时测试使用
+    if 0 == len(g_dicBuyStock):
         return
-    for stock, value in g_dicFoundStock.items():
-        open, high, close = getOnedayHighestAndClosePrice(date, stock)
-        if open > (float(value) * 1.07): #开盘价>7%，以开盘价作为卖价
-            yeild = int( ( (open - float(value)) / float(value) ) * 100 )
-        elif (open < (float(value) * 1.07)) and (high > (float(value) * 1.07)):#开盘价<7%,  盘中>7% ，以7%卖出
-            yeild = 7
-        else: #否者当天收盘价为卖价
-            yeild = int( ( (close - float(value)) / float(value) ) * 100 )
-        g_listYield.append(str(yeild))
-        print('calculateYield: ' + date + str(g_listYield))
+    try:
+        for stock, value in g_dicBuyStock.items():
+            open, high, close = getOnedayHighestAndClosePrice(date, stock)
+            if open > (float(value) * 1.07): #开盘价>7%，以开盘价作为卖价
+                yeild = int( ( (open - float(value)) / float(value) ) * 100 )
+            elif (open < (float(value) * 1.07)) and (high > (float(value) * 1.07)):#开盘价<7%,  盘中>7% ，以7%卖出
+                yeild = 7
+            else: #否者当天收盘价为卖价
+                yeild = int( ( (close - float(value)) / float(value) ) * 100 )
+            #g_listYield.append(str(yeild))
+            readAndCheckCsv.saveProfitToCsv(stock, date, yeild)
+    except Exception as e:
+        PASS
 
 def convertDate(date):
     str_list = list(date)
@@ -231,13 +246,11 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
                 tradeTime = row['trade_time']
                 close = row['close']
                 high = row['high']
-                if float(high) > float(g_limitPrice):
-                    listData = []
-                    break
+
                 if date in tradeTime:
                     if skipTime in tradeTime:
                         break
-                    if False == lastAddFlag:
+                    if False == lastAddFlag: #昨日收盘价保存在list第一条记录里
                         listData.append(lastTradeTime)
                         listData.append(lastClose)
                         listData.append(lastHigh)
@@ -257,18 +270,12 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
 def getCurrentDayDataFromCsv(date, skipTime):
     allStockInfo = {}
     oneStockInfo = []
-    count = 0
-    for k in range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
-        #if g_listAllStocks[k] not in g_listSuspendStocks:
-        oneStockInfo = []
-        oneStockInfo = getOneStockDataFromCsv(g_listAllStocks[k], date, skipTime)
-        if len(oneStockInfo):
-            allStockInfo[g_listAllStocks[k]] = oneStockInfo
-            count += 1
-            #print(f'count={count}' + ', ' + date+ ':  stock=' + g_listAllStocks[k])
-            if count > 100:
-                break
-            #print(oneStockInfo)
+    for k in range(100):#range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
+        if g_listAllStocks[k] not in g_listSuspendStocks:
+            oneStockInfo = []
+            oneStockInfo = getOneStockDataFromCsv(g_listAllStocks[k], date, skipTime)
+            if len(oneStockInfo):
+                allStockInfo[g_listAllStocks[k]] = oneStockInfo
     #print(oneStockInfo)
     return allStockInfo
 
@@ -382,117 +389,71 @@ def writeAllStockCsvToDb():
         localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         print(f'End store stock {ts_code} to DB, time = {localtime}')
 
-def runMainUnuseful():
-    global g_dicFoundStock
-
-    startDate = '20200713'
-    endDate   = '20200717'
-
-    getAllStocks(startDate, endDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
-    getTradeCanlendar(startDate, endDate) #获得起始日期内的合理交易日
-
-    #轮询所有交易日
-    for i in range(1,50):#range(1, len(g_listTradeCanlendar)):
-        date = g_listTradeCanlendar[i]
-        print(f'日期：{date}')
-
-        calculateYield(date) #和昨天比较，计算收益率
-        g_dicFoundStock = {}
-
-        getSuspendStocks(date)  #获取当天的停牌股票信息
-        for j in range(len(g_listAllStocks)): #轮询所有不停牌的股票
-            if g_listAllStocks[j] not in g_listSuspendStocks:
-                try: #获得当前股票的昨日收盘价
-                    oldPrice = getYesterdayClosePrice(g_listAllStocks[j], g_listTradeCanlendar[i-1])
-                except Exception as e: #如果股票今天才上市，那么昨天就没有数据，需要跳过
-                    continue
-
-                highestPrice = calculateZhangTingPrice(oldPrice) #计算出涨停价
-                if int(highestPrice) > 150: #涨停价大于150，则返回继续找下一个股票
-                    continue
-
-                #获得某个股票9:31--10:00之间的分钟数据
-                getSingleStockMinInfo(g_listAllStocks[j], date)
-
-                # 开盘价为涨停价剔除, 继续找下一个股票
-                if float(g_listSingleStockMinHigh[0]) == highestPrice:
-                    continue
-
-                #9:31--10:00之间，最高价能否达到涨停价，如果达到则保存返回，继续找下一个股票
-                for k in range(1, len(g_listSingleStockMinHigh)):
-                    if(float(g_listSingleStockMinHigh[k]) == highestPrice):
-                        g_dicFoundStock[g_listAllStocks[j]] = str(highestPrice)
-                        continue
-
-    print(g_listYield) #打印 startDate~~~~endDate 收益率
-
 def mainFunc():
-    global g_dicFoundStock
+    global g_dicBuyStock
     global g_totalCost
     global g_singlCost
     global g_limitPrice
     global g_listTradeCanlendar
     global g_listAllStocks
 
-    startDate = '20200713'
-    endDate   = '20200717'
+    startDate = '20200601'
+    endDate   = '20200626'
+    # {'000001.SZ': ['2020-07-13 15:00:00', '14.89', '14.89', '2020-07-14 09:30:00', '14.9', '14.9', '2020-07-14 09:31:00', '14.86', '14.9', '2020-07-14 09:32:00'
+    #保存某只股票10点前的分时数据，其中第一条记录是昨天的收盘价
     dictOneDayInfoTo10 = {}
 
     getAllStocks(startDate,endDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
+    #g_listAllStocks = ['002500.SZ']
     getTradeCanlendar(startDate, endDate) #获得起始日期内的合理交易日
 
     #轮询所有交易日
-    for i in range(3):#range(1, len(g_listTradeCanlendar)):
+    for i in range(1, len(g_listTradeCanlendar)):
         date = g_listTradeCanlendar[i]
         print(f'交易日期：{date}')
 
         #卖出昨天买入的股票
 
-        #calculateYield(date) #和昨天比较，计算收益率
-        g_dicFoundStock = {}
+        calculateYield(date) #和昨天比较，计算收益率
+        g_dicBuyStock = {}
 
         getSuspendStocks(date)  #获取当天的停牌股票信息
 
-        localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        print(f'Start read {localtime}')
-
-        #获取当天不停牌的所有股票在9:30--10:00之间的数据，而且股价小于g_limitPrice
-        dictOneDayInfoTo10 = getCurrentDayDataFromDB(date, '10:01:00')
+        #获取当天不停牌的所有股票在9:30--10:00之间的数据
+        dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, '10:01:00')
+        #print(dictOneDayInfoTo10)
         print(f'字典大小={len(dictOneDayInfoTo10)}')
-        print(dictOneDayInfoTo10.keys())
-        print(sys.getsizeof(dictOneDayInfoTo10))
-        localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        print(f'End read {localtime}')
-        return
+        #return
 
-        for j in range(1, 30): #轮序从9:31--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
-            for k in range(len(g_listAllStocks)): #轮询所有不停牌的股票
-                if g_listAllStocks[k] not in g_listSuspendStocks:
-                    #把当前股票数据读取list
-                    #获取当前日期的前一天15:00:00的收盘价
-                    try: #获得当前股票的昨日收盘价
-                        oldPrice = getYesterdayClosePrice(g_listAllStocks[k], g_listTradeCanlendar[i-1])
-                    except Exception as e: #如果股票今天才上市，那么昨天就没有数据，需要跳过
-                        continue
+        startMin = 4
+        for j in range(startMin, 30):  # 轮序从9:34--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
+            for keyCode in dictOneDayInfoTo10:
+                try:  # 获得当前股票的昨日收盘价
+                    oldPrice = dictOneDayInfoTo10[keyCode][1]
+                except Exception as e:  # 如果股票今天才上市，那么昨天就没有数据，需要跳过
+                    continue
 
-                    highestPrice = calculateZhangTingPrice(oldPrice) #计算出涨停价
-                    if int(highestPrice) > 150: #涨停价大于150，则返回继续找下一个股票
-                        continue
+                #前4分钟如果有涨停价，就跳过这只股票
+                skipFlag = False
+                highestPrice = calculateZhangTingPrice(oldPrice)  # 计算出涨停价
+                for loop in range(1, startMin+1):
+                    if dictOneDayInfoTo10[keyCode][3*loop+1] ==highestPrice: #根据收盘价计算
+                        skipFlag = True
+                        break
+                if True == skipFlag:
+                    continue
 
-                    #获得某个股票9:31--10:00之间的分钟数据
-                    getSingleStockMinInfo(g_listAllStocks[k], date)
+                # 获取当前时刻的收盘价
+                currentClosePrice = dictOneDayInfoTo10[keyCode][3*j+2] #根据最高价计算
 
-                    # 开盘价为涨停价剔除, 继续找下一个股票
-                    if float(g_listSingleStockMinHigh[0]) == highestPrice:
-                        continue
-
-                    #9:31--10:00之间，最高价能否达到涨停价，如果达到则保存返回，继续找下一个股票
-                    for k in range(1, len(g_listSingleStockMinHigh)):
-                        if(float(g_listSingleStockMinHigh[k]) == highestPrice):
-                            g_dicFoundStock[g_listAllStocks[k]] = str(highestPrice)
-                            continue
-
-    print(g_listYield) #打印 startDate~~~~endDate 收益率
+                # 9:34--10:00之间，最高价能否达到涨停价，如果达到则保存返回，继续找下一个股票
+                if float(currentClosePrice) == float(highestPrice):
+                    g_dicBuyStock[keyCode] = str(highestPrice)
+                    del dictOneDayInfoTo10[keyCode]
+                    break
+                    print(f'买入：date={i}, time={j}, code={keyCode}, price={str(g_dicBuyStock[keyCode])}')
+    readAndCheckCsv.calculateProfit(readAndCheckCsv.g_profitFileName)
+    readAndCheckCsv.drawProfitPic() #打印 startDate~~~~endDate 收益率
 
 #calculateYield('20200717')
 #getOnedayHighestAndClosePrice('20200717', '002500.SZ')
@@ -509,17 +470,17 @@ if __name__ == "__main__":
     print(f'Start at {localtime}')
     #insertOneStockToMySql('000001.SZ')
     #writeAllStockCsvToDb()
-    #mainFunc()
 
     startDate = '20200106'
     endDate = '20200717'
+    mainFunc()
 
     #fileName = 'C:/python/csv/zhangting/allStock.csv'
     #pro = ts.pro_api()
     #df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
     #df.to_csv(fileName, mode='w', header=True, encoding='utf-8-sig',columns=['ts_code', 'symbol', 'name', 'fullname', 'enname'])
 
-    getAllStocks(startDate, endDate)
+    #getAllStocks(startDate, endDate)
 
     #print(df)
     localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
