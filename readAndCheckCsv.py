@@ -4,6 +4,7 @@ import time
 import datetime
 import csv
 import os.path
+from datetime import datetime
 #画图显示
 import matplotlib.pyplot as plt
 from pylab import mpl #正常显示画图时出现的中文
@@ -63,6 +64,8 @@ def saveFileTest():
     saveProfitToCsv('000020.SZ', '2020-01-01', 20)
 
 def drawProfitPic():
+    localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    print(f'Draw profit picture at {localtime}')
     print(f'drawProfitPic,  g_dirProfit = {g_dirProfit}')
     totalProfit = 0
     averageProfit = 0
