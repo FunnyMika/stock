@@ -81,6 +81,7 @@ def printTableContent(dbName, tableName):
     # 关闭数据库连接
     db.close()
 
+
 dbName = 'stockZT'
 tableName = 'a000001'
 listValue = [('000001.SZ', '2020-06-01 09:30:00', 2.3, 2.4, 2.35)]
@@ -90,3 +91,101 @@ listValue = [('000001.SZ', '2020-06-01 09:30:00', 2.3, 2.4, 2.35)]
 #deleteDataFromTable(dbName, tableName)
 #dropTable(dbName, tableName)
 #printTableContent(dbName, tableName)
+
+#move from main.py
+def getOneStockDataFromDB(ts_code, date, skipTime, dbName):
+    fileName = 'C:/python/csv/zhangting/20200106to20200717/' + ts_code + '.csv'
+    lastTradeTime = 0
+    lastClose = 0
+    lastHigh = 0
+    tradeTime = ''
+    close = 0
+    high = 0
+    lastAddFlag = False
+    listData = []
+
+    date = convertDate(date)
+
+    try:
+        db = pymysql.connect(host='localhost', user='root', password='', port=3306, db=dbName)
+        cursor = db.cursor()
+        tableName = convertTscodeToDbtable(ts_code)
+        sql = "SELECT * FROM %s" % tableName
+        try:
+            # 执行SQL语句
+            cursor.execute(sql)
+            # 获取所有记录列表
+            results = cursor.fetchall()
+            for row in results:
+                #ts_code = row[0]
+                #trade_time = row[1]
+                #open = row[2]
+                #close = row[3]
+                #high = row[4]
+                tradeTime = row[1]
+                close = row[3]
+                high = row[4]
+                if float(high) > float(g_limitPrice):
+                    listData = []
+                    break
+                if date in tradeTime:
+                    if skipTime in tradeTime:
+                        break
+                    if False == lastAddFlag:
+                        listData.append(lastTradeTime)
+                        listData.append(lastClose)
+                        listData.append(lastHigh)
+                        lastAddFlag = True
+                    listData.append(tradeTime)
+                    listData.append(close)
+                    listData.append(high)
+                lastTradeTime = tradeTime
+                lastClose = close
+                lastHigh = high
+        except Exception as e:
+            listData = []
+    except Exception as e:
+        listData = []
+    return listData
+
+def getCurrentDayDataFromDB(date, skipTime):
+    allStockInfo = {}
+    oneStockInfo = []
+    count = 0
+    for k in range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
+        #if g_listAllStocks[k] not in g_listSuspendStocks:
+        oneStockInfo = []
+        oneStockInfo = getOneStockDataFromDB(g_listAllStocks[k], date, skipTime, g_dbZhangTing)
+        if len(oneStockInfo):
+            allStockInfo[g_listAllStocks[k]] = oneStockInfo
+            count += 1
+            #print(f'count={count}' + ', ' + date+ ':  stock=' + g_listAllStocks[k])
+            if count > 100:
+                break
+            #print(oneStockInfo)
+    #print(oneStockInfo)
+    return allStockInfo
+
+def convertTscodeToDbtable(ts_code):
+    preName = 'stock'
+    temp = ts_code[0:6]
+    return preName + temp
+
+def insertOneStockToMySql(ts_code):
+    fileName = 'C:/python/csv/zhangting/20200106to20200717/' + ts_code + '.csv'
+    ts_code, tradeTime = '', ''
+    openPrice, closePrice, highPrice = 0.0, 0.0, 0.0
+    listValue = []
+    with open(fileName, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ts_code = row['ts_code']
+            tradeTime = row['trade_time']
+            openPrice = row['open']
+            closePrice = row['close']
+            highPrice = row['high']
+            listValue.append((ts_code, tradeTime, openPrice, closePrice, highPrice))
+    if(len(listValue) > 0):
+        convertCode = convertTscodeToDbtable(ts_code)
+        operateMySql.createTable(g_dbZhangTing, convertCode)
+        operateMySql.insertDataToTable(g_dbZhangTing, convertCode, listValue)
