@@ -63,15 +63,11 @@ def calculateProfit(fileName):
     for k in g_dirProfit:
         g_dirProfit[k] = round((g_dirProfit[k]) / dirtCount[k], 4)
         g_totalProfit = round(g_totalProfit*(1 + (g_dirProfit[k]/100)),2)
-    #print(g_dirProfit)
+    print('g_dirStock = ' + str(g_dirStock))
 
 def saveFileTest():
     saveProfitToCsv('000020.SZ', '2020-01-01', 3)
     saveProfitToCsv('000030.SZ', '2020-01-01', 5)
-    saveProfitToCsv('000020.SZ', '2020-01-03', 8)
-    saveProfitToCsv('000030.SZ', '2020-01-03', 10)
-    saveProfitToCsv('000040.SZ', '2020-01-02', 33)
-    saveProfitToCsv('000020.SZ', '2020-01-01', 20)
 
 def drawProfitPic():
     localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
@@ -95,6 +91,6 @@ def drawProfitPic():
     plt.legend()
     plt.show()
 
-calculateProfit(g_profitFileName)
-drawProfitPic()
+#calculateProfit(g_profitFileName)
+#drawProfitPic()
 #deleteProfitToCsv(g_profitFileName)
