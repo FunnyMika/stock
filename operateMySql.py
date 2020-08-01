@@ -189,3 +189,16 @@ def insertOneStockToMySql(ts_code):
         convertCode = convertTscodeToDbtable(ts_code)
         operateMySql.createTable(g_dbZhangTing, convertCode)
         operateMySql.insertDataToTable(g_dbZhangTing, convertCode, listValue)
+
+def writeAllStockCsvToDb():
+    startDate = '20200106'
+    endDate = '20200717'
+
+    getAllStocks(startDate, endDate)  # 获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
+
+    # 轮询所有股票
+    for i in range(1, len(g_listAllStocks)):
+        ts_code = g_listAllStocks[i]
+        insertOneStockToMySql(ts_code)
+        localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        print(f'End store stock {ts_code} to DB, time = {localtime}')

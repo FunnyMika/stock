@@ -19,6 +19,7 @@ g_listAllStocks = []
 g_listSuspendStocks = []
 g_listTradeCanlendar = []
 g_listSingleStockMinHigh = []
+g_listWhite = []
 g_dicBuyStock = {}
 g_dicYield = {}
 g_totalCost = 1000000  #拿100万人民币进行测试
@@ -26,7 +27,9 @@ g_singlCost = 100000  #每支股票买10万块钱
 g_limitPrice = 100.00 #股价超过100块钱则不买
 
 filePathNewAllStock = 'C:/python/csv/zhangting/allStocks.csv'
+g_whiteCsvFile = 'C:/python/csv/zhangting/whitelist.csv'
 g_dbZhangTing = 'stockZT'
+g_loopStockNum = 0
 #获得交易日
 def getTradeCanlendar(startDate, endDate):
     global g_listTradeCanlendar
@@ -36,47 +39,87 @@ def getTradeCanlendar(startDate, endDate):
         g_listTradeCanlendar.append(df.iloc[i,1])
     print('getTradeCanlendar: ' + str(g_listTradeCanlendar))
 
+def readWhiteListFromCsv():
+    global g_listWhite
+    g_listWhite = []
+
+    try:
+        with open(g_whiteCsvFile, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ts_code = row['ts_code']
+                g_listWhite.append(ts_code)
+    except Exception as e:
+        g_listWhite = []
+    print(f'whiteList count={len(g_listWhite)}')
+    print(g_listWhite)
+
 #获取所有股票,1)非深圳，上海，创业板3类股票剔除 2)ST股票剔除 3)收盘价>100剔除
 def getAllStocks(startDate, endDate):
     global g_listAllStocks
     filterList = []
     stList = []
     highPriceList = []
-    pro = ts.pro_api()
-    df = pro.query('daily_basic', ts_code='', trade_date=startDate,fields='ts_code, close')
+    whiteList = []
 
-    #保存非00/30/60开头的股票，需要剔除
-    for index, row in df.iterrows():
-        if (False == row['ts_code'].startswith('00')) and (False == row['ts_code'].startswith('30')) and (False == row['ts_code'].startswith('60')):
-            filterList.append(index)
+    if True == os.path.isfile(g_profitFileName):
+        pro = ts.pro_api()
+        df = pro.query('daily_basic', ts_code='', trade_date=startDate,fields='ts_code, close')
 
-    #剔除非00/30/60开头的股票
-    for i in range(len(filterList)):
-        df = df.drop([filterList[i]])
-    #把股票保存到list
-    for i in range(len(df)):
-        g_listAllStocks.append(df.iloc[i,0])
+        #保存非00/30/60开头的股票，需要剔除
+        for index, row in df.iterrows():
+            if (False == row['ts_code'].startswith('00')) and (False == row['ts_code'].startswith('30')) and (False == row['ts_code'].startswith('60')):
+                filterList.append(index)
 
-    df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
-    # 保存ST股票，需要剔除
-    for index, row in df.iterrows():
-        if 'ST' in row['name']:
-            stList.append(row['ts_code'])
-    #把ST股票从保存的股票里面剔除
-    for i in range(len(stList)):
-        if stList[i] in g_listAllStocks:
-            g_listAllStocks.remove(stList[i])
+        #剔除非00/30/60开头的股票
+        for i in range(len(filterList)):
+            df = df.drop([filterList[i]])
+        #把股票保存到list
+        for i in range(len(df)):
+            g_listAllStocks.append(df.iloc[i,0])
 
-    #获取 价格 > 100的股票列表
-    highPriceList = []
-    df = pro.query('daily_basic', ts_code='', trade_date=endDate, fields='ts_code, close')
-    for index, row in df.iterrows():
-        if row['close'] > 100:
-            highPriceList.append(row['ts_code'])
-    # 把 价格 > 100 的股票从保存的股票里面剔除
-    for i in range(len(highPriceList)):
-        if highPriceList[i] in g_listAllStocks:
-            g_listAllStocks.remove(highPriceList[i])
+        df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
+        # 保存ST股票，需要剔除
+        for index, row in df.iterrows():
+            if 'ST' in row['name']:
+                stList.append(row['ts_code'])
+        #把ST股票从保存的股票里面剔除
+        for i in range(len(stList)):
+            if stList[i] in g_listAllStocks:
+                g_listAllStocks.remove(stList[i])
+
+        #获取 价格 > 100的股票列表
+        highPriceList = []
+        df = pro.query('daily_basic', ts_code='', trade_date=endDate, fields='ts_code, close')
+        for index, row in df.iterrows():
+            if row['close'] > 100:
+                highPriceList.append(row['ts_code'])
+        # 把 价格 > 100 的股票从保存的股票里面剔除
+        for i in range(len(highPriceList)):
+            if highPriceList[i] in g_listAllStocks:
+                g_listAllStocks.remove(highPriceList[i])
+    else:
+        PASS
+
+    #读取白名单列表 g_listWhite
+    readWhiteListFromCsv()
+
+    print(f'g_listAllStocks[1712]={g_listAllStocks[1712]}')
+
+    #所有股票必须在白名单里才行
+    tempAllList = []
+    tempAllList = g_listAllStocks
+    print(f'len = {len(tempAllList)}')
+    i = 0
+    for i in range(len(tempAllList)):
+        if i > 1710:
+            print(f'i={i}')
+        code = tempAllList[i]
+        code = code[0:6]
+        if code not in g_listWhite:
+            g_listAllStocks.remove(tempAllList[i])
+
+    print(f'len2 = {len(g_listAllStocks)}')
 
     print(f'No 00_30_60_prefix num={len(filterList)}, ST num={len(stList)}, price > 100 num={len(highPriceList)}, AllStocks num = {len(g_listAllStocks)}')
     print('getAllStocks: ' + str(g_listAllStocks))
@@ -229,6 +272,8 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
     lastTradeTime, lastClose, lastHigh, close, high = 0, 0, 0, 0, 0
     tradeTime = ''
     lastAddFlag = False
+    qtClose, ztClose =0,0 #前天收盘价，昨天收盘价
+    listClose150000 = []      #15:00:00收盘价
     listData = []
     date = convertDate(date)
 
@@ -239,14 +284,25 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
                 tradeTime = row['trade_time']
                 close = row['close']
                 high = row['high']
+                if '15:00:00' in tradeTime:
+                    listClose150000.append(tradeTime)
+                    listClose150000.append(close)
+                    listClose150000.append(high)
 
                 if date in tradeTime:
                     if skipTime in tradeTime:
                         break
                     if False == lastAddFlag: #昨日收盘价保存在list第一条记录里
-                        listData.append(lastTradeTime)
-                        listData.append(lastClose)
-                        listData.append(lastHigh)
+                        close150000Len = len(listClose150000)
+                        if close150000Len < 6:
+                            listData = []
+                            break
+                        listData.append(listClose150000[close150000Len - 1 - 5])
+                        listData.append(listClose150000[close150000Len - 1 - 4])
+                        listData.append(listClose150000[close150000Len - 1 - 3])
+                        listData.append(listClose150000[close150000Len - 1 - 2])
+                        listData.append(listClose150000[close150000Len - 1 - 1])
+                        listData.append(listClose150000[close150000Len - 1 - 0])
                         lastAddFlag = True
                     listData.append(tradeTime)
                     listData.append(close)
@@ -263,7 +319,7 @@ def getOneStockDataFromCsv(ts_code, date, skipTime):
 def getCurrentDayDataFromCsv(date, skipTime):
     allStockInfo = {}
     oneStockInfo = []
-    for k in range(2000):#range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
+    for k in range(g_loopStockNum):#range(len(g_listWhite)):#range(len(g_listAllStocks)):  # 轮询所有不停牌的股票
         if g_listAllStocks[k] not in g_listSuspendStocks:
             oneStockInfo = []
             oneStockInfo = getOneStockDataFromCsv(g_listAllStocks[k], date, skipTime)
@@ -272,32 +328,19 @@ def getCurrentDayDataFromCsv(date, skipTime):
     #print(oneStockInfo)
     return allStockInfo
 
-def writeAllStockCsvToDb():
-    startDate = '20200106'
-    endDate = '20200717'
-
-    getAllStocks(startDate, endDate)  # 获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
-
-    # 轮询所有股票
-    for i in range(1, len(g_listAllStocks)):
-        ts_code = g_listAllStocks[i]
-        insertOneStockToMySql(ts_code)
-        localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        print(f'End store stock {ts_code} to DB, time = {localtime}')
-
-def mainFunc():
+def mainFunc(startDate, endDate, endTime):
     global g_dicBuyStock
     global g_totalCost
     global g_singlCost
     global g_limitPrice
     global g_listTradeCanlendar
     global g_listAllStocks
+    global g_loopStockNum
 
     skipStockList = []
 
-    startDate = '20200601'
-    #startDate = '20200603'
-    endDate   = '20200717'
+    #startDate = '20200703'
+    #endDate   = '20200708'
     hasReachMaxBoughtNum = False
     maxBoughtNum = 7
 
@@ -306,12 +349,21 @@ def mainFunc():
     dictOneDayInfoTo10 = {}
     readAndCheckCsv.deleteProfitToCsv(readAndCheckCsv.g_profitFileName)
 
-    getAllStocks(startDate,endDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
-    #g_listAllStocks = ['000659.SZ']
+    #getAllStocks(startDate,endDate)  #获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
+    readWhiteListFromCsv()
+    g_listAllStocks = g_listWhite
+    #g_listAllStocks = ['000839.SZ']
+    g_loopStockNum = len(g_listWhite)
+    #g_loopStockNum = 1
     getTradeCanlendar(startDate, endDate) #获得起始日期内的合理交易日
 
+    startTime = datetime.strptime('2020-01-01 09:30:00', '%Y-%m-%d %H:%M:%S')
+    lastTime = datetime.strptime('2019-01-01 '+endTime, '%Y-%m-%d %H:%M:%S')
+    delta = lastTime - startTime
+    loopMin = int(delta.seconds / 60)
+
     #轮询所有交易日
-    for i in range(1, len(g_listTradeCanlendar)):
+    for i in range(0, len(g_listTradeCanlendar)):
         date = g_listTradeCanlendar[i]
         hasReachMaxBoughtNum = False
         skipStockList = []
@@ -324,10 +376,12 @@ def mainFunc():
         #getSuspendStocks(date)  #获取当天的停牌股票信息
 
         #获取当天不停牌的所有股票在9:30--10:00之间的数据
-        dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, '10:01:00')
+        dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, endTime)
+        if 0 == len(dictOneDayInfoTo10):
+            continue
 
-        startMin = 4
-        for j in range(startMin, 30):  # 轮序从9:34--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
+        startMin = 2
+        for j in range(startMin, loopMin):  # 轮序从9:32--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
             # 当日购买的股票数量达到上限就不再买入，跳过当前日期
             if True == hasReachMaxBoughtNum:
                 break
@@ -342,15 +396,21 @@ def mainFunc():
                     continue
 
                 try:  # 获得当前股票的昨日收盘价
-                    oldPrice = float(dictOneDayInfoTo10[keyCode][1])
+                    oldOldPrice = float(dictOneDayInfoTo10[keyCode][1])
+                    oldPrice = float(dictOneDayInfoTo10[keyCode][4])
                 except Exception as e:  # 如果股票今天才上市，那么昨天就没有数据，需要跳过
                     continue
+
+                #如果不是首板也就是昨天涨停了，就跳过
+                if oldPrice == calculateZhangTingPrice(oldOldPrice):
+                    skipStockList.append(keyCode)
+                    break
 
                 #前4分钟如果有涨停价，就跳过这只股票
                 skipFlag = False
                 highestPrice = calculateZhangTingPrice(oldPrice)  # 计算出涨停价
-                for loop in range(1, startMin+1):
-                    tmpPrice = float(dictOneDayInfoTo10[keyCode][3*loop+1])
+                for loop in range(0, startMin):
+                    tmpPrice = float(dictOneDayInfoTo10[keyCode][3*loop+7])
                     if tmpPrice == highestPrice: #根据收盘价计算
                         skipFlag = True
                         skipStockList.append(keyCode)
@@ -359,13 +419,13 @@ def mainFunc():
                     continue
 
                 # 获取当前时刻的收盘价
-                currentClosePrice = float(dictOneDayInfoTo10[keyCode][3*j+2]) #根据最高价计算
+                currentClosePrice = float(dictOneDayInfoTo10[keyCode][3*j+8]) #根据最高价计算
 
                 # 9:34--10:00之间，最高价能否达到涨停价，如果达到则保存返回，继续找下一个股票
                 if float(currentClosePrice) == float(highestPrice):
                     g_dicBuyStock[keyCode] = str(highestPrice)
-                    time1 = '9:' + str(30+j)
-                    print(f'买入：date={g_listTradeCanlendar[i]}, time={time1}, code={keyCode}, price={str(g_dicBuyStock[keyCode])}')
+                    time1 = dictOneDayInfoTo10[keyCode][3*j+6]
+                    print(f'买入：time={time1}, code={keyCode}, price={str(g_dicBuyStock[keyCode])}')
                     if len(g_dicBuyStock) >= maxBoughtNum:
                         hasReachMaxBoughtNum = True
     readAndCheckCsv.calculateProfit(readAndCheckCsv.g_profitFileName)
@@ -385,10 +445,11 @@ if __name__ == "__main__":
     localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     print(f'Start at {localtime}')
 
-    startDate = '20200106'
+    startDate = '20200701'
     endDate = '20200717'
-    mainFunc()
+    endTime = '11:00:00'
+    mainFunc(startDate, endDate, endTime)
+    #getAllStocks(startDate, endDate)
 
-    #print(df)
     localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     print(f'End at {localtime}')
