@@ -13,6 +13,7 @@ mpl.rcParams['axes.unicode_minus']=False #画图时显示负号
 
 g_profitFileName = 'C:/python/csv/zhangting/profit.csv'
 g_dirProfit = {}
+g_dirStock = {}
 g_totalProfit = 0
 #('000020.SZ', '2020-01-01', 9.5)
 def saveProfitToCsv(ts_code, date, profit):
@@ -36,6 +37,7 @@ def deleteProfitToCsv(name):
 def calculateProfit(fileName):
     global g_dirProfit
     global g_totalProfit
+    global g_dirStock
     g_dirProfit = {}
     dirtCount = {}
     if False == os.path.isfile(fileName):
@@ -45,14 +47,18 @@ def calculateProfit(fileName):
         for row in reader:
             date = row['date']
             value = row['profit']
+            stock = row['ts_code']
             if date not in g_dirProfit:
                 g_dirProfit[date] = float(value)
                 dirtCount[date] = 1
+                g_dirStock[date] = stock
             else:
                 g_dirProfit[date] = g_dirProfit[date] + float(value)
                 dirtCount[date] = dirtCount[date] + 1
+                g_dirStock[date] = g_dirStock[date] + ',' + stock
     #print(g_dirProfit)
     g_dirProfit = dict(sorted(g_dirProfit.items(), key=lambda d: d[0], reverse=False))
+    g_dirStock = dict(sorted(g_dirStock.items(), key=lambda d: d[0], reverse=False))
     g_totalProfit = 1
     for k in g_dirProfit:
         g_dirProfit[k] = round((g_dirProfit[k]) / dirtCount[k], 4)
