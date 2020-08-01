@@ -13,6 +13,7 @@ mpl.rcParams['axes.unicode_minus']=False #画图时显示负号
 
 g_profitFileName = 'C:/python/csv/zhangting/profit.csv'
 g_dirProfit = {}
+g_totalProfit = 0
 #('000020.SZ', '2020-01-01', 9.5)
 def saveProfitToCsv(ts_code, date, profit):
     writeMethod = 'w'
@@ -34,6 +35,7 @@ def deleteProfitToCsv(name):
 
 def calculateProfit(fileName):
     global g_dirProfit
+    global g_totalProfit
     g_dirProfit = {}
     dirtCount = {}
     if False == os.path.isfile(fileName):
@@ -51,8 +53,10 @@ def calculateProfit(fileName):
                 dirtCount[date] = dirtCount[date] + 1
     #print(g_dirProfit)
     g_dirProfit = dict(sorted(g_dirProfit.items(), key=lambda d: d[0], reverse=False))
+    g_totalProfit = 1
     for k in g_dirProfit:
         g_dirProfit[k] = round((g_dirProfit[k]) / dirtCount[k], 4)
+        g_totalProfit = round(g_totalProfit*(1 + (g_dirProfit[k]/100)),2)
     #print(g_dirProfit)
 
 def saveFileTest():
@@ -81,10 +85,10 @@ def drawProfitPic():
     for i in range(len(y1)):
         totalProfit += y1[i]
     averageProfit = round(totalProfit / len(y1), 2)
-    plt.title(str(len(y1)) + '天' + '平均收益率: ' + str(averageProfit))
+    plt.title(str(len(y1)) + '天' + '平均收益率: ' + str(averageProfit) + ', 总收益: ' + str(g_totalProfit))
     plt.legend()
     plt.show()
 
-#calculateProfit(g_profitFileName)
-#drawProfitPic()
+calculateProfit(g_profitFileName)
+drawProfitPic()
 #deleteProfitToCsv(g_profitFileName)
