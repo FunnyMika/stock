@@ -2,7 +2,8 @@ import tushare as ts
 import pandas as pd
 import csv
 import time
-from datetime import datetime
+import datetime
+#from datetime import datetime
 import os.path
 from urllib.request import urlopen
 from urllib.parse import urlparse
@@ -17,7 +18,7 @@ import readAndCheckCsv
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 g_listAllStocks = []
 g_listSuspendStocks = []
-g_listTradeCanlendar = []
+g_listTradeCalendar = []
 g_listSingleStockMinHigh = []
 g_listWhite = []
 g_dicBuyStock = {}
@@ -27,17 +28,85 @@ g_singlCost = 100000  #每支股票买10万块钱
 g_limitPrice = 100.00 #股价超过100块钱则不买
 
 filePathNewAllStock = 'C:/python/csv/zhangting/allStocks.csv'
-g_whiteCsvFile = 'C:/python/csv/zhangting/whitelist.csv'
-g_dbZhangTing = 'stockZT'
+
+g_fileBasePath = 'C:/python/csv/zhangting/202001060731/'
+g_whiteCsvFile = g_fileBasePath + 'whitelist/whitelist.csv'
+g_calendarFile = 'C:/python/csv/zhangting/validCalendar.csv'
+
 g_loopStockNum = 0
 #获得交易日
-def getTradeCanlendar(startDate, endDate):
-    global g_listTradeCanlendar
+def getTradeCalendar(startDate, endDate):
+    listTempCalendar = []
+    listTradeCalendar = []
+
+    try:
+        with open(g_calendarFile, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cal_date = row['cal_date']
+                listTempCalendar.append(cal_date)
+    except Exception as e:
+        listTempCalendar = []
+    #print('listTempCalendar: ' + str(listTempCalendar))
+    if 0 == len(listTempCalendar):
+        print(f'日期文件不存在，请检查! e={e}')
+        exit(0)
+
+    begin_date = datetime.datetime.strptime(startDate, "%Y%m%d")
+    calendarFileBeginDate = datetime.datetime.strptime(listTempCalendar[0], "%Y%m%d")
+    if begin_date < calendarFileBeginDate:
+        print(f'起始日期太早了，startDate = {startDate}, calendarFileBeginDate = {listTempCalendar[0]}')
+        exit(0)
+
+    end_date = datetime.datetime.strptime(endDate, "%Y%m%d")
+    calendarFileEndDate = datetime.datetime.strptime(listTempCalendar[len(listTempCalendar)-1], "%Y%m%d")
+    if end_date > calendarFileEndDate:
+        print(f'结束日期太晚了，end_date = {end_date}, calendarFileEndDate = {listTempCalendar[len(listTempCalendar)-1]}')
+        exit(0)
+
+    startDataFlag = False
+    endDateFlag = False
+    if (startDate not in listTempCalendar) or (endDate not in listTempCalendar):
+        begin_date = datetime.datetime.strptime(startDate, "%Y%m%d")
+        end_date   = datetime.datetime.strptime(endDate, "%Y%m%d")
+        if startDate in listTempCalendar:
+            startDataFlag = True
+        if endDate in listTempCalendar:
+            endDateFlag = True
+        for i in range(12):
+            if False == startDataFlag:
+                delta = datetime.timedelta(days=1)
+                begin_date = begin_date + delta
+                tempDate = str(begin_date.date())
+                tempDate = tempDate.replace('-', '')
+                if tempDate in listTempCalendar:
+                    startDate = tempDate
+                    startDataFlag = True
+
+            if False == endDateFlag:
+                delta = datetime.timedelta(days=-1)
+                end_date = end_date + delta
+                tempDate = str(end_date.date())
+                tempDate = tempDate.replace('-', '')
+                if tempDate in listTempCalendar:
+                    endDate = tempDate
+                    endDateFlag = True
+
+    i = listTempCalendar.index(startDate)
+    j = listTempCalendar.index(endDate)
+    listTradeCalendar = listTempCalendar[i:(j+1)]
+
+    return startDate, endDate, listTradeCalendar
+
+#保存从20100104到今天的可交易日期
+def saveTradeCalendar():
+    startDate = '20100104'
+    now = datetime.datetime.now()
+    endDate = now.strftime('%Y%m%d')
+
     pro = ts.pro_api()
-    df = pro.trade_cal(exchange='', start_date=startDate, end_date=endDate, is_open = 1)
-    for i in range(len(df)):
-        g_listTradeCanlendar.append(df.iloc[i,1])
-    print('getTradeCanlendar: ' + str(g_listTradeCanlendar))
+    df = pro.trade_cal(exchange='', start_date=startDate, end_date=endDate, is_open=1)
+    df.to_csv(g_calendarFile, columns=['exchange','cal_date'])
 
 def readWhiteListFromCsv():
     global g_listWhite
@@ -162,7 +231,7 @@ def getYesterdayClosePrice(ts_code, date):
 def getOnedayHighestAndClosePrice(date, ts_code):
     openPrice, closePrice, highPrice = 0.0, 0.0, 0.0
     openFlag = False
-    fileName = 'C:/python/csv/zhangting/20200106to20200717/' + ts_code + '.csv'
+    fileName = g_fileBasePath + ts_code + '.csv'
     date = convertDate(date)
 
     with open(fileName, 'r', encoding='utf-8') as f:
@@ -206,7 +275,7 @@ def convertDate(date):
     return dateStr
 
 def saveMinuteDataInfo(ts_code, startDate, endDate):
-    fileName = 'C:/python/csv/zhangting/' + ts_code +'.csv'
+    fileName = g_fileBasePath + ts_code +'.csv'
     startTime = convertDate(startDate)
     endTime   = convertDate(endDate)
     startTime = startTime + ' 09:30:00'
@@ -215,36 +284,36 @@ def saveMinuteDataInfo(ts_code, startDate, endDate):
     df = ts.pro_bar(ts_code=ts_code, freq='1min', start_date=startTime, end_date=endTime)
     df = df.sort_index(ascending=False)
     if False == os.path.isfile(fileName):
-        df.to_csv(fileName,mode='a', header=True,columns=['ts_code', 'trade_time', 'open', 'close', 'high'])
+        df.to_csv(fileName,mode='a', header=True,columns=['ts_code', 'trade_time', 'open', 'close', 'high', 'low'])
     else:
-        df.to_csv(fileName, mode='a', header=False,columns=['ts_code', 'trade_time', 'open', 'close', 'high'])
+        df.to_csv(fileName, mode='a', header=False,columns=['ts_code', 'trade_time', 'open', 'close', 'high', 'low'])
 
 def downloadMinutesToCsv(startDate, endDate):
     listStartCanlender = []
     listEndCanlender = []
-    getTradeCanlendar(startDate, endDate)
+    getTradeCalendar(startDate, endDate)
     getAllStocks(startDate, endDate)  # 获取所有股票,从所有股票里过滤出深圳，上海，创业板3类股票
 
     # 1. 轮询所有日期，把第一个月的第一天取出来放到一个list里面
-    for i in range(len(g_listTradeCanlendar)-1):
-        tmpStr5 = g_listTradeCanlendar[i][0:6]
+    for i in range(len(g_listTradeCalendar)-1):
+        tmpStr5 = g_listTradeCalendar[i][0:6]
         tmpListStr = ''.join(listStartCanlender)
         if tmpStr5 not in tmpListStr:
-            listStartCanlender.append(g_listTradeCanlendar[i])
+            listStartCanlender.append(g_listTradeCalendar[i])
 
     #1.轮询所有日期，把第一个月的最后一天取出来放到一个list里面
-    g_listTradeCanlendar.sort(reverse=True)
-    for i in range(len(g_listTradeCanlendar)-1):
-        tmpStr5 = g_listTradeCanlendar[i][0:6]
+    g_listTradeCalendar.sort(reverse=True)
+    for i in range(len(g_listTradeCalendar)-1):
+        tmpStr5 = g_listTradeCalendar[i][0:6]
         tmpListStr = ''.join(listEndCanlender)
         if tmpStr5 not in tmpListStr:
-            listEndCanlender.append(g_listTradeCanlendar[i])
+            listEndCanlender.append(g_listTradeCalendar[i])
     listEndCanlender.sort(reverse=False)
 
     print(listStartCanlender)
     print(listEndCanlender)
 
-    g_listTradeCanlendar.sort(reverse=False)
+    g_listTradeCalendar.sort(reverse=False)
 
     for i in range(len(g_listAllStocks)): #轮询所有股票
         #2. 把每个月的分时数据取出来存入文件，有几个月就存几次文件
@@ -257,11 +326,9 @@ def downloadMinutesToCsv(startDate, endDate):
             except Exception as e:
                 continue
 
-        # 3. 把每个文件里10点以后的数据删除
-
 #从csv文件里读取某一个股票的某一天在某一时间段内，估计不超过g_limitPrice的数据，并保存到list里面返回
 def getOneStockDataFromCsv(ts_code, date, skipTime):
-    fileName = 'C:/python/csv/zhangting/20200106to20200717/' + ts_code + '.csv'
+    fileName = g_fileBasePath + ts_code + '.csv'
     lastTradeTime, lastClose, lastHigh, close, high = 0, 0, 0, 0, 0
     tradeTime = ''
     lastAddFlag = False
@@ -325,7 +392,7 @@ def mainFunc(startDate, endDate, endTime):
     global g_totalCost
     global g_singlCost
     global g_limitPrice
-    global g_listTradeCanlendar
+    global g_listTradeCalendar
     global g_listAllStocks
     global g_loopStockNum
 
@@ -347,16 +414,16 @@ def mainFunc(startDate, endDate, endTime):
     #g_listAllStocks = ['000839.SZ']
     g_loopStockNum = len(g_listAllStocks)
     #g_loopStockNum = 1
-    getTradeCanlendar(startDate, endDate) #获得起始日期内的合理交易日
 
-    startTime = datetime.strptime('2020-01-01 09:30:00', '%Y-%m-%d %H:%M:%S')
-    lastTime = datetime.strptime('2019-01-01 '+endTime, '%Y-%m-%d %H:%M:%S')
+    #获取一天内某个时间段内需要循环的次数
+    startTime = datetime.datetime.strptime('2020-01-01 09:30:00', '%Y-%m-%d %H:%M:%S')
+    lastTime = datetime.datetime.strptime('2019-01-01 '+endTime, '%Y-%m-%d %H:%M:%S')
     delta = lastTime - startTime
     loopMin = int(delta.seconds / 60)
 
     #轮询所有交易日
-    for i in range(0, len(g_listTradeCanlendar)):
-        date = g_listTradeCanlendar[i]
+    for i in range(0, len(g_listTradeCalendar)):
+        date = g_listTradeCalendar[i]
         hasReachMaxBoughtNum = False
         skipStockList = []
         print(f'交易日期：{date}')
@@ -365,15 +432,17 @@ def mainFunc(startDate, endDate, endTime):
         calculateYield(date) #和昨天比较，计算收益率
         g_dicBuyStock = {}
 
-        #if endDate in g_listTradeCanlendar
+        #结束那天只卖出股票，不再买入
+        if endDate == date:
+            break
 
         #获取当天不停牌的所有股票在9:30--10:00之间的数据
         dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, endTime)
         if 0 == len(dictOneDayInfoTo10):
             continue
 
-        startMin = 2
-        for j in range(startMin, loopMin):  # 轮序从9:32--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
+        startMin = 1
+        for j in range(startMin, loopMin):  # 轮序从9:31--10:00之间的所有股票，每分钟轮序一次所有股票，看是否符合条件买入
             # 当日购买的股票数量达到上限就不再买入，跳过当前日期
             if True == hasReachMaxBoughtNum:
                 break
@@ -433,15 +502,18 @@ def mainFunc(startDate, endDate, endTime):
 #getSingleStockMinInfo('002500.SZ', '20200717')
 
 if __name__ == "__main__":
-    localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    localtime = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     print(f'Start at {localtime}')
 
-    startDate = '20200701'
-    endDate = '20200707'
+    startDate = '20200704'
+    endDate   = '20200712'
     endTime = '11:30:00'
+    # downloadMinutesToCsv(startDate, endDate)  #下载起始日期到截止日期的分钟数据到 g_fileBasePath
+    #saveTradeCalendar()  #把20100101到今天的所有交易日期保存到文件 g_calendarFile
+    startDate, endDate, g_listTradeCalendar = getTradeCalendar(startDate, endDate)
+    print(f'交易日期 = {str(g_listTradeCalendar)}')
 
     mainFunc(startDate, endDate, endTime)
-    #getAllStocks(startDate, endDate)
 
-    localtime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    localtime = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     print(f'End at {localtime}')

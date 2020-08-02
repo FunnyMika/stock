@@ -1,5 +1,7 @@
 import pymysql
 
+g_dbZhangTing = 'stockZT'
+
 def createDB(dbName):
     db = pymysql.connect(host='localhost',user='root', password='')
     cursor = db.cursor()
