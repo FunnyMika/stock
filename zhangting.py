@@ -262,7 +262,7 @@ def calculateYield(date):
         for stock, value in g_dicBuyStock.items():
             open1, low, high, close = getOnedayHighestAndClosePrice(date, stock)
             highestPrice = round(float(value) * 1.1, 2)
-            if 0 == open:
+            if (0 == open1) or (0 == low) or (0 == close):
                 print(f'Abnormal: date={date},stock={stock},open1={open1}, low={low}, high={high}, close={close},highestPrice={highestPrice}')
                 continue
             if low == highestPrice:
