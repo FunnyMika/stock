@@ -16,7 +16,7 @@ headers = {
             #'Host': '10.159.215.231:8080'
         }
 
-#print(response.text)
+#在同花顺网页获取所有板块的名字及链接 http://q.10jqka.com.cn/thshy/
 def getAllIndustryNameAndLink():
     response = requests.get(get_url, headers=headers)
     soup = BeautifulSoup(response.text, 'lxml')
@@ -33,6 +33,7 @@ def getAllIndustryNameAndLink():
     except Exception as e:
         pass
 
+#在同花顺网页获取涨幅在前20名的板块 http://q.10jqka.com.cn/thshy/
 def getIndustryOrder():
     #response = requests.get(get_url, headers=headers)
     #soup = BeautifulSoup(response.text, 'lxml')
@@ -56,6 +57,7 @@ def getIndustryOrder():
     except Exception as e:
         pass
 
+#根据tushare获取申万行业分类
 def getIndustryList():
 
     pro = ts.pro_api()
