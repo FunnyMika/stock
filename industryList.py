@@ -15,6 +15,75 @@ headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36',
             #'Host': '10.159.215.231:8080'
         }
+
+#print(response.text)
+def getAllIndustryNameAndLink():
+    response = requests.get(get_url, headers=headers)
+    soup = BeautifulSoup(response.text, 'lxml')
+    print(response.text)
+    try:
+        for items in soup.find_all(class_='cate_items'):
+            try:
+                for link in items.find_all('a'):
+                    href = link.attrs['href']
+                    if href is not None:
+                        print(f'name={link.string}, href={href}')
+            except Exception as e:
+                pass
+    except Exception as e:
+        pass
+
+def getIndustryOrder():
+    #response = requests.get(get_url, headers=headers)
+    #soup = BeautifulSoup(response.text, 'lxml')
+    soup = BeautifulSoup(testText, 'lxml')
+    #print(response.text)
+    count = 0
+    try:
+        tbody = soup.find('tbody')
+        try:
+            for tr in tbody.find_all(name='tr'):
+                href = tr.find('a')
+                fudu = tr.find(class_ = re.compile('^(c-)+'))
+
+                #获取前20个板块
+                if fudu is not None and count < 20:
+                    print(f'板块名字 = {href.string}, 涨幅 = {fudu.string}')
+                    count += 1
+                    continue
+        except Exception as e:
+            pass
+    except Exception as e:
+        pass
+
+def getIndustryList():
+
+    pro = ts.pro_api()
+    #df = pro.daily(ts_code='603881.SH', start_date='20200731', end_date='20200803', fields = 'trade_date, close')
+
+    # https://tushare.pro/document/2?doc_id=181 申万行业分类
+    #获取申万一级行业列表
+    df = pro.index_classify(level='L1', src='SW')
+    #print(df)
+
+    #获取申万二级行业列表
+    df = pro.index_classify(level='L2', src='SW')
+    #print(df)
+
+    #获取申万三级级行业列表
+    df = pro.index_classify(level='L3', src='SW')
+    #print(df)
+
+    #https: // tushare.pro / document / 2?doc_id = 182 申万行业成分构成
+    #获取黄金分类的成份股
+    df = pro.index_member(index_code='850531.SI')
+    #print(df)
+
+    #获取000001.SZ所属行业
+    df = pro.index_member(ts_code='000001.SZ')
+    #print(df)
+
+
 testText = ''''
 <!DOCTYPE html>
 <html>
@@ -32,8 +101,8 @@ testText = ''''
     </script>
     <link rel="stylesheet" href="http://s.thsi.cn/cb?css/q/;reset.css;common_v1.css&20161130"/>
         <link rel="stylesheet" href="http://s.thsi.cn/cb?css/q/;concept.css;/gn/common.css&20161130"/>
-                
-     
+
+
     <script type="text/javascript" src="http://s.thsi.cn/cb?js/sogo/jquery-1.8.3.min.js;js/ta_callback.min.20150327.js;js/webHQ/resources/excanvas.min.js&"></script>
 </head>
 <body>
@@ -95,7 +164,7 @@ testText = ''''
             </ul>
 
         </div>
-        
+
         <div class="sub-nav" data-type="bk" style="display: none;">
 
             <div class="triangle"></div>
@@ -108,7 +177,7 @@ testText = ''''
 
             </ul>
         </div>
-        
+
         <div class="sub-nav" data-type="hssc" style="display: none;">
             <div class="triangle"></div>
             <ul class="channel clearfix">
@@ -230,7 +299,7 @@ testText = ''''
                                         <a href="http://q.10jqka.com.cn/thshy/detail/code/881101/" target="_blank">种植业与林业</a>
                                     </div>
             </div>
-                       
+
         </div>
     </div>
     <!-- <div class="cate_toggle_wrap">
@@ -242,7 +311,7 @@ testText = ''''
         <h2>同花顺行业一览表</h2>
     </div>
     <div class="body m-pager-box" id="maincont" data-fixedthead="true">
-        
+
         <table class="m-table m-pager-table">
             <thead>
             <tr>
@@ -967,7 +1036,7 @@ testText = ''''
         <div class="m-pager" id="m-page">
          &nbsp;<a class="cur" page="1" href="javascript:void(0)">1</a>&nbsp;&nbsp;<a class="changePage" page="2" href="javascript:void(0);">2</a>&nbsp;&nbsp;<a class="changePage" page="2" href="javascript:void(0);">下一页</a><a class="changePage" page="2" href="javascript:void(0);">尾页</a><span class="page_info">1/2</span>
         </div>
-           
+
     </div>
 </div>
 </div>
@@ -1079,80 +1148,12 @@ if (typeof(fidId)!="undefined" && fidId!=null) {
 	        pager.init();
 	    }
 	});
-	
-	
+
+
 </script>
 
 </body>
 </html>
 '''
 
-#print(response.text)
-def getAllIndustryNameAndLink():
-    response = requests.get(get_url, headers=headers)
-    soup = BeautifulSoup(response.text, 'lxml')
-    print(response.text)
-    try:
-        for items in soup.find_all(class_='cate_items'):
-            try:
-                for link in items.find_all('a'):
-                    href = link.attrs['href']
-                    if href is not None:
-                        print(f'name={link.string}, href={href}')
-            except Exception as e:
-                pass
-    except Exception as e:
-        pass
-
-def getIndustryOrder():
-    response = requests.get(get_url, headers=headers)
-    soup = BeautifulSoup(response.text, 'lxml')
-    #soup = BeautifulSoup(testText, 'lxml')
-    #print(response.text)
-    count = 0
-    try:
-        tbody = soup.find('tbody')
-        try:
-            for tr in tbody.find_all(name='tr'):
-                href = tr.find('a')
-                fudu = tr.find(class_ = re.compile('^(c-)+'))
-
-                #获取前20个板块
-                if fudu is not None and count < 20:
-                    print(f'板块名字 = {href.string}, 涨幅 = {fudu.string}')
-                    count += 1
-                    continue
-        except Exception as e:
-            pass
-    except Exception as e:
-        pass
-
 getIndustryOrder()
-
-def getIndustryList():
-
-    pro = ts.pro_api()
-    #df = pro.daily(ts_code='603881.SH', start_date='20200731', end_date='20200803', fields = 'trade_date, close')
-
-    # https://tushare.pro/document/2?doc_id=181 申万行业分类
-    #获取申万一级行业列表
-    df = pro.index_classify(level='L1', src='SW')
-    #print(df)
-
-    #获取申万二级行业列表
-    df = pro.index_classify(level='L2', src='SW')
-    #print(df)
-
-    #获取申万三级级行业列表
-    df = pro.index_classify(level='L3', src='SW')
-    #print(df)
-
-    #https: // tushare.pro / document / 2?doc_id = 182 申万行业成分构成
-    #获取黄金分类的成份股
-    df = pro.index_member(index_code='850531.SI')
-    #print(df)
-
-    #获取000001.SZ所属行业
-    df = pro.index_member(ts_code='000001.SZ')
-    #print(df)
-
