@@ -57,6 +57,53 @@ def getIndustryOrder():
     except Exception as e:
         pass
 
+#在同花顺网页获取涨幅在前20名的板块 http://q.10jqka.com.cn/thshy/
+#http://q.10jqka.com.cn/thshy/detail/code/881121/
+#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
+#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/2/ajax/1/code/881145
+def getStocksFromIndustry(webURL, name, savedFilePath):
+    webURL = 'http://q.10jqka.com.cn/thshy/detail/code/881121/'
+    response = requests.get(webURL, headers=headers)
+    soup = BeautifulSoup(response.text, 'lxml')
+    #soup = BeautifulSoup(testText, 'lxml')
+    #print(response.text)
+    flag = False
+
+    try:
+        tbody = soup.find('tbody')
+        try:
+            for tr in tbody.find_all(name='tr'):
+                flag = False
+                for td in tr.find_all(name='a'):
+                    if False == flag:
+                        ts_code = td.string
+                        flag = True
+                    else:
+                        ts_name = td.string
+                        print(f'名字={ts_name}, 股票代码={ts_code}')
+                        break
+        except Exception as e:
+            pass
+
+        # http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
+        try:
+            page_info = soup.find(class_ = 'page_info')
+            if tbody is not None:
+                print(f'找到了下一页, 页数信息={page_info.string}')
+                pageNum = int(page_info.string[2:3])
+                ts_stock = webURL[-7:-1]
+                #print(ts_stock)
+                for i in range(2, pageNum+1):
+                    pageURL = 'http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/' + str(i) + '/ajax/1/code/' + ts_stock
+                    print(pageURL)
+
+                #print(pageNum)
+        except Exception as e:
+            pass
+    except Exception as e:
+        pass
+
+getStocksFromIndustry('1', '1', '1')
 #根据tushare获取申万行业分类
 def getIndustryList():
 
@@ -1158,4 +1205,4 @@ if (typeof(fidId)!="undefined" && fidId!=null) {
 </html>
 '''
 
-getIndustryOrder()
+#getIndustryOrder()
