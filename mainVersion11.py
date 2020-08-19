@@ -26,6 +26,7 @@ import readAndCheckCsv
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 g_listAllStocks = []
 g_listSuspendStocks = []
+g_dictLimitStock = {}
 g_listTradeCalendar = []
 g_listSingleStockMinHigh = []
 g_listWhite = []
@@ -39,8 +40,100 @@ filePathNewAllStock = 'C:/python/csv/zhangting/allStocks.csv'
 g_fileBasePath = 'C:/python/csv/zhangting/202001060731/'
 g_whiteCsvFile = g_fileBasePath + 'whitelist/whitelist.csv'
 g_calendarFile = 'C:/python/csv/zhangting/validCalendar.csv'
+g_dailyCsv = 'C:/python/csv/zhangting/daily/2019to2020/'
 
 g_loopStockNum = 0
+
+#获取所有股票,1)非深圳，上海股票剔除 2)ST股票剔除
+def getAllStocks(startDate, endDate):
+    global g_listAllStocks
+    filterList = []
+    stList = []
+
+    pro = ts.pro_api()
+    df = pro.query('daily_basic', ts_code='', trade_date=startDate,fields='ts_code, close, circ_mv')
+
+    #1.1 保存非00/60开头的股票，其他需要剔除
+    for index, row in df.iterrows():
+        if (False == row['ts_code'].startswith('00')) and (False == row['ts_code'].startswith('60')) :
+            filterList.append(index)
+
+    #1.2 剔除非00/60开头的股票
+    for i in range(len(filterList)):
+        df = df.drop([filterList[i]])
+    #全部股票保存到list
+    for i in range(len(df)):
+        g_listAllStocks.append(df.iloc[i,0])
+
+    df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
+    #2.1 保存ST股票，需要剔除
+    for index, row in df.iterrows():
+        if 'ST' in row['name']:
+            stList.append(row['ts_code'])
+    #2.2把ST股票从保存的股票里面剔除
+    g_listAllStocks = list(set(g_listAllStocks).difference(stList))
+
+    print(f'AllStocks num = {len(g_listAllStocks)}, No 00_60_prefix: num={len(filterList)}, ST: num={len(stList)}')
+    print('getAllStocks: ' + str(g_listAllStocks))
+
+def downloadAllStocks(startDate, endDate, filePath):
+    for i in range(len(g_listAllStocks)):
+        fileName = filePath + g_listAllStocks[i] + '.csv'
+        pro = ts.pro_api()
+        try:
+            df = pro.query('daily', ts_code=g_listAllStocks[i], start_date=startDate, end_date=endDate)
+        except:
+            print(f'skip stock={g_listAllStocks[i]}')
+            continue
+        df = df.sort_index(ascending=False)
+        if False == os.path.isfile(fileName):
+            df.to_csv(fileName, mode='a', header=True,
+                      columns=['trade_date', 'open', 'high', 'low', 'close', 'pre_close'])
+        else:
+            df.to_csv(fileName, mode='a', header=False,
+                      columns=['trade_date', 'open', 'high', 'low', 'close', 'pre_close'])
+
+#从本地文件夹获取目录下的所有文件
+def getStockIDFromLocal(filePath):
+    global g_listAllStocks
+    filesList = []
+    files = []
+    for root, dirs, files in os.walk(filePath):
+        break
+
+    for i in range(len(files)):
+        if (files[i][0:2] == '00') or (files[i][0:2] == '60'):
+            g_listAllStocks.append(files[i][0:9])
+    print(f'所有股票池: num = {len(g_listAllStocks)}, list = {g_listAllStocks}')
+
+#获取某一天所有停牌的股票代码
+def getSuspendStocks(date):
+    global g_listSuspendStocks
+
+    pro = ts.pro_api()
+    df = pro.suspend_d(suspend_type='S', trade_date=date)
+    for index, row in df.iterrows():
+            g_listSuspendStocks.append(row['ts_code'])
+
+def saveOpenLimitStockToCsv(startDate, endDate, filePath):
+    limitFileName = filePath + 'limitAllstock.csv'
+    readAndCheckCsv.deleteFile(limitFileName)
+    for i in range(len(g_listAllStocks)):
+        fileName = filePath + g_listAllStocks[i] + '.csv'
+        try:
+            with open(fileName, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    tradeDate = row['trade_date']
+                    open1 = float(row['open'])
+                    pre_close = float(row['pre_close'])
+                    limit = calculateZhangTingPrice(pre_close)
+                    if open1 == limit:
+                        readAndCheckCsv.saveLimitToCsv(limitFileName, tradeDate, g_listAllStocks[i])
+        except Exception as e:
+            print(e)
+            continue
+
 #获得交易日
 def getTradeCalendar(startDate, endDate):
     listTempCalendar = []
@@ -113,77 +206,8 @@ def saveTradeCalendar():
 
     pro = ts.pro_api()
     df = pro.trade_cal(exchange='', start_date=startDate, end_date=endDate, is_open=1)
+    readAndCheckCsv.deleteFile(g_calendarFile)
     df.to_csv(g_calendarFile, columns=['exchange','cal_date'])
-
-def readWhiteListFromCsv():
-    global g_listWhite
-    g_listWhite = []
-
-    try:
-        with open(g_whiteCsvFile, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ts_code = row['ts_code']
-                g_listWhite.append(ts_code)
-    except Exception as e:
-        g_listWhite = []
-    print(f'whiteList count={len(g_listWhite)}')
-    print(g_listWhite)
-
-#获取所有股票,1)非深圳，上海股票剔除 2)ST股票剔除
-def getAllStocks(startDate, endDate):
-    global g_listAllStocks
-    filterList = []
-    stList = []
-    highPriceList = []
-    whiteList = []
-
-    pro = ts.pro_api()
-    df = pro.query('daily_basic', ts_code='', trade_date=startDate,fields='ts_code, close, circ_mv')
-
-    #1.1 保存非00/60开头的股票，其他需要剔除
-    for index, row in df.iterrows():
-        if (False == row['ts_code'].startswith('00')) and (False == row['ts_code'].startswith('60')) :
-            filterList.append(index)
-
-    #1.2 剔除非00/60开头的股票
-    for i in range(len(filterList)):
-        df = df.drop([filterList[i]])
-    #全部股票保存到list
-    for i in range(len(df)):
-        g_listAllStocks.append(df.iloc[i,0])
-
-    df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
-    #2.1 保存ST股票，需要剔除
-    for index, row in df.iterrows():
-        if 'ST' in row['name']:
-            stList.append(row['ts_code'])
-    #2.2把ST股票从保存的股票里面剔除
-    g_listAllStocks = list(set(g_listAllStocks).difference(stList))
-
-    print(f'AllStocks num = {len(g_listAllStocks)}, No 00_60_prefix and > 市值100亿: num={len(filterList)}, ST: num={len(stList)}, price > 100: num={len(highPriceList)}')
-    print('getAllStocks: ' + str(g_listAllStocks))
-
-def getStockIDFromLocal(filePath):
-    global g_listAllStocks
-    filesList = []
-    files = []
-    for root, dirs, files in os.walk(filePath):
-        break
-
-    for i in range(len(files)):
-        if (files[i][0:2] == '00') or (files[i][0:2] == '60'):
-            g_listAllStocks.append(files[i][0:9])
-    print(f'所有股票池: num = {len(g_listAllStocks)}, list = {g_listAllStocks}')
-
-#获取某一天所有停牌的股票代码
-def getSuspendStocks(date):
-    global g_listSuspendStocks
-
-    pro = ts.pro_api()
-    df = pro.suspend_d(suspend_type='S', trade_date=date)
-    for index, row in df.iterrows():
-            g_listSuspendStocks.append(row['ts_code'])
 
 #获取股票1分钟数据
 #ts_code           trade_time            open  close   high    low     vol
@@ -227,19 +251,22 @@ def getOnedayHighestAndClosePrice(date, ts_code):
     #if '002316.SZ' == ts_code:
     #    print(f'002316.SZ commming date={date}')
 
-    with open(fileName, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            trade_time = row['trade_time']
-            if date in trade_time:
-                if False == openFlag:
-                    openPrice = float(row['open'])
-                    openFlag = True
-                closePrice = float(row['close'])
-                if highPrice < float(row['high']):
-                    highPrice = float(row['high'])
-                if lowPrice > float(row['low']):
-                    lowPrice = float(row['low'])
+    try:
+        with open(fileName, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                trade_time = row['trade_time']
+                if date in trade_time:
+                    if False == openFlag:
+                        openPrice = float(row['open'])
+                        openFlag = True
+                    closePrice = float(row['close'])
+                    if highPrice < float(row['high']):
+                        highPrice = float(row['high'])
+                    if lowPrice > float(row['low']):
+                        lowPrice = float(row['low'])
+    except:
+        t = 0
     return openPrice, lowPrice, highPrice, closePrice
 
 #计算收益率
@@ -403,22 +430,23 @@ def mainFunc(startDate, endDate, endTime):
     # {'000001.SZ': ['2020-07-13 15:00:00', '14.89', '14.89', '2020-07-14 09:30:00', '14.9', '14.9', '2020-07-14 09:31:00', '14.86', '14.9', '2020-07-14 09:32:00'
     #保存某只股票10点前的分时数据，其中第一条记录是昨天的收盘价
     dictOneDayInfoTo10 = {}
-    readAndCheckCsv.deleteProfitToCsv(readAndCheckCsv.g_profitFileName) #初始化，把老的profit文件先删除
-
-    g_loopStockNum = len(g_listAllStocks)
-    #g_listAllStocks = ['000698.SZ']
+    readAndCheckCsv.deleteFile(readAndCheckCsv.g_profitFileName) #初始化，把老的profit文件先删除
 
     #获取一天内某个时间段内需要循环的次数
     startTime = datetime.datetime.strptime('2020-01-01 09:30:00', '%Y-%m-%d %H:%M:%S')
     lastTime = datetime.datetime.strptime('2019-01-01 '+endTime, '%Y-%m-%d %H:%M:%S')
     delta = lastTime - startTime
-    loopMin = int(delta.seconds / 60)
+    loopMin = int(delta.seconds / 60) - 90
 
     #轮询所有交易日
     for i in range(0, len(g_listTradeCalendar)):
         date = g_listTradeCalendar[i]
         hasReachMaxBoughtNum = False
         skipStockList = []
+        g_listAllStocks = []
+        g_loopStockNum = 0
+        stockZhangTingList1 = []
+        stockSkipList2 = []
         print(f'交易日期：{date}')
 
         #卖出昨天买入的股票
@@ -430,25 +458,19 @@ def mainFunc(startDate, endDate, endTime):
             break
 
         #获取当天不停牌的所有股票在9:30--11:00之间的数据, 数据结构：ts_time, low, high, close
+        g_listAllStocks = g_dictLimitStock[date].split(',')
+
+        #ast.literal_eval(data)
+        g_loopStockNum = len(g_listAllStocks)
         dictOneDayInfoTo10 = getCurrentDayDataFromCsv(date, endTime)
         if 0 == len(dictOneDayInfoTo10):
+            print('continue')
             continue
 
-        #1. 轮询当天所有股票，第一分钟如果是涨停价，保存到list里面 stockZhangTingList1
-        stockZhangTingList1 = []
-        for keyCode in dictOneDayInfoTo10:
-            try:  # 获得当前股票的昨日收盘价
-                oldPrice = float(dictOneDayInfoTo10[keyCode][7])
-            except Exception as e:  # 如果股票今天才上市，那么昨天就没有数据，需要跳过
-                continue
-
-            # 如果当天第一分钟的low价格是涨停价，就保存
-            highestPrice = calculateZhangTingPrice(oldPrice)  # 计算今天的涨停价是多少
-            if highestPrice == float(dictOneDayInfoTo10[keyCode][13]):
-                stockZhangTingList1.append(keyCode)
+        #1. 把开盘就是涨停价的股票赋值到list里面 stockZhangTingList1
+        stockZhangTingList1 = g_listAllStocks
 
         #2. 如果这个股票一直处于涨停价，则保存到list2，需要过滤掉
-        stockSkipList2 = []
         for j in range(len(stockZhangTingList1)):
             open1, low, high, close = getOnedayHighestAndClosePrice(date, stockZhangTingList1[j])
             if low == high:
@@ -456,11 +478,12 @@ def mainFunc(startDate, endDate, endTime):
 
         #3，把一直处于涨停价的股票过滤掉
         stockZhangTingList1 = list(set(stockZhangTingList1).difference(stockSkipList2))
+        stockZhangTingList1.sort()
+        print(f'    stockZhangTingList num={len(stockZhangTingList1)}, list = {stockZhangTingList1}')
 
         #4. 轮询所有符合条件的股票，如果有过开盘又封盘的，则买入
         for j in range(len(stockZhangTingList1)):
             startMin = 1
-            loopMin = 230
             openFlag = False
             keyCode = stockZhangTingList1[j]
 
@@ -478,13 +501,14 @@ def mainFunc(startDate, endDate, endTime):
 
             startMin = 2
             for k in range(startMin, loopMin):
+                #print(f'date={date},keyCode={keyCode}, k={k}, loopMin={loopMin}')
                 currentlowPrice = float(dictOneDayInfoTo10[keyCode][4 * k + 9])  # 根据最低价计算
                 # 开板了，则设置标志位openFlag为true
                 if float(currentlowPrice) < float(highestPrice):
                     openFlag = True
 
                 #开板过，又达到了涨停价，则买入，继续轮询下一个股票
-                currentHighPrice = float(dictOneDayInfoTo10[keyCode][4 * k + 10])  # 根据最高价计算
+                currentHighPrice = float(dictOneDayInfoTo10[keyCode][4 * k + 11])  # 根据收盘价计算
                 if (True == openFlag) and (float(currentHighPrice) == float(highestPrice)):
                     tempList = [str(highestPrice), 1]
                     g_dicBuyStock[keyCode] = tempList
@@ -510,17 +534,23 @@ if __name__ == "__main__":
     localtime = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     print(f'Start at {localtime}')
 
-    startDate = '20200708'
-    endDate   = '20200712'
-    endTime = '15:00:00'
+    startDate = '20200701'
+    endDate   = '20200731'
+    endTime = '14:30:00'
     #downloadMinutesToCsv(startDate, endDate)  #下载起始日期到截止日期的分钟数据到 g_fileBasePath
 
     #saveTradeCalendar()  #把20100101到今天的所有交易日期保存到文件 g_calendarFile
     startDate, endDate, g_listTradeCalendar = getTradeCalendar(startDate, endDate) #从本地获取可交易日期
     print(f'交易日期范围 = {str(g_listTradeCalendar)}')
 
-    #getAllStocks(startDate, endDate)
-    getStockIDFromLocal(g_fileBasePath)
+    #getAllStocks(startDate, endDate) #从网页获取符合条件的股票，并且保存在一个list里面
+    #downloadAllStocks(startDate, endDate, g_dailyCsv) #把上面list里的股票日线数据下载到本地
+
+    #getStockIDFromLocal(g_dailyCsv) #从本地文件夹搜索所有文件，获取股票ID，并且保存到list里面
+    #saveOpenLimitStockToCsv(startDate, endDate, g_dailyCsv) #把开盘即涨停的股票，保存到一个文件里
+
+    #读取开盘即涨停的csv文件，把所有数据返回到一个字段里，key是日期，value是股票字符串
+    g_dictLimitStock = readAndCheckCsv.getOpenLimitStockFromCsv(g_dailyCsv + 'limitAllstock.csv')
 
     mainFunc(startDate, endDate, endTime)
 
