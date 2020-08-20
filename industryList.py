@@ -4,18 +4,32 @@ import lxml
 from lxml import etree
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urlencode
 
+from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.support.ui import WebDriverWait
+
+import time
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 
 g_industryPathBase = 'C:/python/csv/industry/'
 
 get_url = 'http://q.10jqka.com.cn/thshy/'
 headers = {
-            #'Referer': g_ciWebPage,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36',
+            'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Encoding':'gzip, deflate',
+            'Accept-Language':'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,fr;q=0.6',
+            'Host':'q.10jqka.com.cn',
+            'Proxy-Connection':'keep-alive',
+            'Upgrade-Insecure-Requests':'1',
+            'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36',
             #'Host': '10.159.215.231:8080'
         }
 
+#b1 = webdriver.phantomjs(executable_path = 'C:/python/tools/phantomjs-2.1.1-windows/bin/phantomjs.exe')
+#b1.get('www.baidu.com')
+#print(b1.current_url)
 #在同花顺网页获取所有板块的名字及链接 http://q.10jqka.com.cn/thshy/
 def getAllIndustryNameAndLink():
     response = requests.get(get_url, headers=headers)
@@ -57,17 +71,39 @@ def getIndustryOrder():
     except Exception as e:
         pass
 
-#在同花顺网页获取涨幅在前20名的板块 http://q.10jqka.com.cn/thshy/
-#http://q.10jqka.com.cn/thshy/detail/code/881121/
-#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
-#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/2/ajax/1/code/881145
-def getStocksFromIndustry(webURL, name, savedFilePath):
-    webURL = 'http://q.10jqka.com.cn/thshy/detail/code/881121/'
+def getStocksFromOnePage(webURL):
+    webURL = 'http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/3/code/881121'
     response = requests.get(webURL, headers=headers)
-    soup = BeautifulSoup(response.text, 'lxml')
-    #soup = BeautifulSoup(testText, 'lxml')
-    #print(response.text)
+    print(response.text)
+    return
+    print('进入 getStocksFromOnePage')
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--start-maximized')  # 最大化运行（全屏窗口）,不设置，取元素会报错
+    options.add_argument('--disable-infobars')  # 禁用浏览器正在被自动化程序控制的提示
+    options.add_argument('--incognito')  # 隐身模式（无痕模式）
+    #prefs = {"profile.managed_default_content_settings.images":2,'permissions.default.stylesheet':2}
+    #options.add_argument('--proxy-server=10.144.1.10:8080')
+    #options.add_experimental_option("prefs", prefs)
+    #desired_capabilities = DesiredCapabilities.CHROME
+    #desired_capabilities["pageLoadStrategy"] = "none"
+
+    browser = webdriver.Chrome(chrome_options=options)
+    wait = WebDriverWait(browser, 60)  # 后面可以使用wait对特定元素进行等待
+    browser.set_page_load_timeout(60)
+    browser.set_script_timeout(60)
+    try:
+        browser.get(webURL)
+    except:
+        print("加载页面太慢，停止加载，继续下一步操作")
+        #browser.execute_script("window.stop()")
+
+    soup = BeautifulSoup(browser.page_source,'lxml')
     flag = False
+    dictStock = {}
+    #print(browser.page_source)
 
     try:
         tbody = soup.find('tbody')
@@ -80,30 +116,52 @@ def getStocksFromIndustry(webURL, name, savedFilePath):
                         flag = True
                     else:
                         ts_name = td.string
-                        print(f'名字={ts_name}, 股票代码={ts_code}')
+                        print(f'股票代码={ts_code}, 名字={ts_name}')
+                        dictStock[ts_code] = ts_name
                         break
-        except Exception as e:
-            pass
-
-        # http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
-        try:
-            page_info = soup.find(class_ = 'page_info')
-            if tbody is not None:
-                print(f'找到了下一页, 页数信息={page_info.string}')
-                pageNum = int(page_info.string[2:3])
-                ts_stock = webURL[-7:-1]
-                #print(ts_stock)
-                for i in range(2, pageNum+1):
-                    pageURL = 'http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/' + str(i) + '/ajax/1/code/' + ts_stock
-                    print(pageURL)
-
-                #print(pageNum)
         except Exception as e:
             pass
     except Exception as e:
         pass
+    browser.close()
+    return dictStock
 
-getStocksFromIndustry('1', '1', '1')
+getStocksFromOnePage('http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/2/ajax/1/code/881121')
+
+#在同花顺网页获取涨幅在前20名的板块 http://q.10jqka.com.cn/thshy/
+#http://q.10jqka.com.cn/thshy/detail/code/881121/
+#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
+#http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/2/ajax/1/code/881145
+def getStocksFromIndustry(webURL, name, savedFilePath):
+    webURL = 'http://q.10jqka.com.cn/thshy/detail/code/881121/'
+    response = requests.get(webURL, headers=headers)
+    soup = BeautifulSoup(response.text, 'lxml')
+    #soup = BeautifulSoup(testText, 'lxml')
+    #print(response.text)
+    flag = False
+
+    getStocksFromOnePage(webURL)
+    #return;
+
+    # http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/5/ajax/1/code/881121
+    try:
+        page_info = soup.find(class_ = 'page_info')
+        if page_info is not None:
+            print(f'找到了下一页, 当前页面: {page_info.string}')
+            pageNum = int(page_info.string[2:3])
+            ts_stock = webURL[-7:-1]
+            print(f'pageNum={pageNum}')
+            for i in range(2, pageNum+1):
+                pageURL = 'http://q.10jqka.com.cn/thshy/detail/field/199112/order/desc/page/' + str(i) + '/ajax/1/code/' + ts_stock
+                print(f'页面：{i}, pageURL={pageURL}')
+                getStocksFromOnePage(pageURL)
+                time.sleep(5)
+            #print(pageNum)
+    except Exception as e:
+        pass
+
+#getStocksFromIndustry('1', '1', '1')
+
 #根据tushare获取申万行业分类
 def getIndustryList():
 
@@ -132,7 +190,15 @@ def getIndustryList():
     df = pro.index_member(ts_code='000001.SZ')
     #print(df)
 
+def listCombine():
+    list1 = [1,2,3,4,5]
+    list2 = [2,3,5]
+    list3 = list(set(list1).intersection(set(list2)))
+    list4 = list(set(list1).difference(list2))
+    print(f'两个list交集={list3}')
+    print(f'两个list差集={list4}')
 
+#listCombine()
 testText = ''''
 <!DOCTYPE html>
 <html>

@@ -7,25 +7,24 @@ import pandas as pd
 import csv
 import time
 import datetime
-#from datetime import datetime
 import os.path
 import os
 
 ts.set_token('85a6e863fa91060204e5339228932e52c4f90863d773778f3040f14a')
 
-#保存从20100104到今天的可交易日期
-def saveTradeCalendar():
+#保存从20100104到今天的可交易日期到本地
+def saveTradeCalendarToLocal(calendarFile):
     startDate = '20100104'
     now = datetime.datetime.now()
     endDate = now.strftime('%Y%m%d')
 
     pro = ts.pro_api()
     df = pro.trade_cal(exchange='', start_date=startDate, end_date=endDate, is_open=1)
-    readAndCheckCsv.deleteFile(g_calendarFile)
-    df.to_csv(g_calendarFile, columns=['exchange','cal_date'])
+    readAndCheckCsv.deleteFile(calendarFile)
+    df.to_csv(calendarFile, columns=['exchange','cal_date'])
 
 #获得交易日
-def getTradeCalendar(startDate, endDate):
+def getTradeCalendarFromWeb(startDate, endDate):
     listTempCalendar = []
     listTradeCalendar = []
     startDate2010 = '20100104'
@@ -135,7 +134,7 @@ def getAllStocks(startDate, endDate):
 
 #下载日线数据，startDate = '20190202', endDate = '20200818', filePaht = 'C:/python/csv/zhangting/daily/2019to2020/'
 def downloadDailyToCsv(startDate, endDate, filePath):
-    startDate, endDate, listTradeCalendar = getTradeCalendar(startDate, endDate)
+    startDate, endDate, listTradeCalendar = getTradeCalendarFromWeb(startDate, endDate)
     listAllStocks = getAllStocks(startDate, endDate)
 
     for i in range(len(listAllStocks)):
@@ -169,7 +168,7 @@ def downloadMinutesToCsv(startDate, endDate, filePath):
     startTime = startTime + ' 09:30:00'
     endTime = endTime + ' 15:00:00'
 
-    startDate, endDate, listTradeCalendar = getTradeCalendar(startDate, endDate)
+    startDate, endDate, listTradeCalendar = getTradeCalendarFromWeb(startDate, endDate)
     listAllStocks = getAllStocks(startDate, endDate)
 
     for i in range(len(listAllStocks)): #轮询所有股票
@@ -187,4 +186,4 @@ endDate = '20190110'
 g_dailyCsv = 'C:/python/csv/temp/mini/'
 
 #downloadDailyToCsv(startDate, endDate, g_dailyCsv) #把日线数据下载到本地
-downloadMinutesToCsv(startDate, endDate, g_dailyCsv) #把分钟数据下载到本地
+#downloadMinutesToCsv(startDate, endDate, g_dailyCsv) #把分钟数据下载到本地
