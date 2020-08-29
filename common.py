@@ -104,21 +104,21 @@ def downloadSurgedStockListByTushare(date):
             print(f'Saved {fileName} successfully!')
             
 #获取收盘价 > 10日均线 1.05倍的黑名单
-def getMa10BlackList(date, list1):
+def getMa10BlackList(date, stockList):
     ma10BlackList = []
-    #lastDate = getLastTradeDate()
-    print(f'getMa10BlackList')
+    d1 = datetime.datetime.strptime(date, '%Y%m%d')
+    startDate = (d1 - datetime.timedelta(days=20)).strftime("%Y%m%d")
+    startDate = str(startDate)
 
-    for key in list1:
-        df = ts.pro_bar(ts_code=key, start_date='20200814', end_date=date,ma=[10])
+    for stock in stockList:
+        df = ts.pro_bar(ts_code=stock, start_date=startDate, end_date=date,ma=[10])
         for index, row in df.iterrows():
             close = row['close']
             ma10 = row['ma10']
-            #print(row['ma10'])
             #收盘价 > 10日均线 1.05倍
             if float(close) > (float(ma10) * 1.05):
-                ma10BlackList.append(key)
-                print(f'black stock = {key}')
+                ma10BlackList.append(stock)
+                print(f'black stock = {stock}, close = {close}, ma = {ma10}')
             break
     return ma10BlackList
 
@@ -128,8 +128,8 @@ def downloadMa10BlackListByTushare(date):
     fileName = os.getcwd() + '\Above10DayAverageList.json'
     fileName = fileName.replace('\\', '/')
 
-    #allStockList = getAllStocks(date)
-    #allStockList = getMa10BlackList(date, allStockList)
+    allStockList = getAllStocks(date)
+    allStockList = getMa10BlackList(date, allStockList)
     allStockList = ['002979.SZ', '600610.SH']
     allStockList = converStockList(allStockList)
     if len(allStockList) > 0:
@@ -143,7 +143,6 @@ def downloadMa10BlackListByTushare(date):
 date = '20200828'
 #downloadSurgedStockListByTushare(date)
 downloadMa10BlackListByTushare(date)
-
 #getSurgedStocks(date)
 #list1 = getAllStocks(date)
 #print(list1)
