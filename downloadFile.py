@@ -91,29 +91,19 @@ def getTradeCalendarFromWeb(startDate, endDate):
     return startDate, endDate, listTradeCalendar
 
 #获取所有股票,1)非深圳，上海股票剔除 2)ST股票剔除
-def getAllStocks(startDate, endDate):
+def getAllStocks(Date):
     listAllStocks = []
-    filterList = []
     stList = []
 
     pro = ts.pro_api()
     try:
-        df = pro.query('daily_basic', ts_code='', trade_date=startDate,fields='ts_code, close, circ_mv')
+        df = pro.query('daily_basic', ts_code='', trade_date=Date,fields='ts_code')
+        for index, row in df.iterrows():
+            if (True == row['ts_code'].startswith('00')) or (True == row['ts_code'].startswith('60')):
+                listAllStocks.append(row['ts_code'])
     except Exception as e:
         print(f'getAllStocks daily basic failed!')
         return
-
-    #1.1 保存非00/60开头的股票，其他需要剔除
-    for index, row in df.iterrows():
-        if (False == row['ts_code'].startswith('00')) and (False == row['ts_code'].startswith('60')) :
-            filterList.append(index)
-
-    #1.2 剔除非00/60开头的股票
-    for i in range(len(filterList)):
-        df = df.drop([filterList[i]])
-    #全部股票保存到list
-    for i in range(len(df)):
-        listAllStocks.append(df.iloc[i,0])
 
     try:
         df = pro.query('stock_basic', exchange='', list_status='L', fields='ts_code,symbol,name,fullname,enname')
@@ -121,21 +111,20 @@ def getAllStocks(startDate, endDate):
         print(f'getAllStocks stock basic failed!')
         return
 
-    #2.1 保存ST股票，需要剔除
+    #保存ST股票，需要剔除
     for index, row in df.iterrows():
         if 'ST' in row['name']:
             stList.append(row['ts_code'])
-    #2.2把ST股票从保存的股票里面剔除
+    #把ST股票从保存的股票里面剔除
     listAllStocks = list(set(listAllStocks).difference(stList))
 
-    print(f'AllStocks num = {len(listAllStocks)}, No 00_60_prefix: num={len(filterList)}, ST: num={len(stList)}')
-    print('getAllStocks: ' + str(listAllStocks))
+    print(f'AllStocks num = {len(listAllStocks)}, ST: num={len(stList)}')
     return listAllStocks
 
 #下载日线数据，startDate = '20190202', endDate = '20200818', filePaht = 'C:/python/csv/zhangting/daily/2019to2020/'
 def downloadDailyToCsv(startDate, endDate, filePath):
     startDate, endDate, listTradeCalendar = getTradeCalendarFromWeb(startDate, endDate)
-    listAllStocks = getAllStocks(startDate, endDate)
+    listAllStocks = getAllStocks(startDate)
 
     for i in range(len(listAllStocks)):
         fileName = filePath + listAllStocks[i] + '.csv'
@@ -169,7 +158,7 @@ def downloadMinutesToCsv(startDate, endDate, filePath):
     endTime = endTime + ' 15:00:00'
 
     startDate, endDate, listTradeCalendar = getTradeCalendarFromWeb(startDate, endDate)
-    listAllStocks = getAllStocks(startDate, endDate)
+    listAllStocks = getAllStocks(startDate)
 
     for i in range(len(listAllStocks)): #轮询所有股票
         fileName = filePath + listAllStocks[i] + '.csv'
@@ -181,9 +170,9 @@ def downloadMinutesToCsv(startDate, endDate, filePath):
         df = df.sort_index(ascending=False)
         df.to_csv(fileName, mode='a', header=True, columns=['ts_code', 'trade_time', 'open', 'close', 'high', 'low'])
 
-startDate = '20190101'
+startDate = '20200827'
 endDate = '20190110'
 g_dailyCsv = 'C:/python/csv/temp/mini/'
-
+getAllStocks(startDate)
 #downloadDailyToCsv(startDate, endDate, g_dailyCsv) #把日线数据下载到本地
 #downloadMinutesToCsv(startDate, endDate, g_dailyCsv) #把分钟数据下载到本地
