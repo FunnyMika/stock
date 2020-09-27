@@ -367,6 +367,7 @@ if __name__ == "__main__":
     #downloadFile.saveTradeCalendarToLocal(g_calendarFile)
     #downloadFile.downloadDailyToCsv(startDate, endDate, filePath)
     #downloadFile.downloadMinutesToCsv(startDate, endDate, filePath)
+    #saveOpenLimitStockToCsv(startDate, endDate, g_dailyCsvPath)
 
     mainFunc(startDate, endDate, endTime)
 
